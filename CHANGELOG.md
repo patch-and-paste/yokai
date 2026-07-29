@@ -87,6 +87,17 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Update translations from Weblate
 
 ### Other
+- Raise the minimum Android version to 8.0 (API 26), up from 6.0. Android 6.0, 7.0 and 7.1 no
+  longer receive updates
+  - Below API 24 D8 desugars interface default methods into abstract ones, `GeneratedSerializer`
+    from `kotlinx.serialization` among them. Extensions are dexed against the real default method,
+    so their generated serializers carried no implementation and every decode inside an extension
+    threw `AbstractMethodError`
+  - API 24 is enough to stop the desugaring; 26 is the level the extension ecosystem is built at
+- Leave content encoding to OkHttp on the shared HTTP client
+  - The client used to strip `Accept-Encoding` so Brotli could handle compression itself, and lib
+    1.6 sources refuse to run on a client that does that. Transparent gzip applies again instead
+  - `okhttp-brotli` is still on the classpath for extensions that install it themselves
 - Replace `scanlators_view` with a real `excluded_scanlators` table
   - The view split `mangas.filtered_scanlators` with a recursive CTE over every row of `mangas`, and
     was joined by every chapter, history and library query, so it was rebuilt from scratch each time

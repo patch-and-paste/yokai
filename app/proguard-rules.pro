@@ -12,6 +12,9 @@
 -keep,allowoptimization class kotlin.time.** { public protected *; }
 -keep,allowoptimization class okhttp3.** { public protected *; }
 -keep,allowoptimization class okio.** { public protected *; }
+# okhttp-zstd's decoder falls outside both globs above and nothing in the app calls it, so R8
+# drops it and any extension asking for zstd fails with ClassNotFoundException.
+-keep,allowoptimization class com.squareup.zstd.** { public protected *; }
 -keep,allowoptimization class rx.** { public protected *; }
 -keep,allowoptimization class org.jsoup.** { public protected *; }
 -keep,allowoptimization class com.google.gson.** { public protected *; }
