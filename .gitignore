@@ -11,3 +11,8 @@
 .kotlin/
 kls_database.db
 weblate.conf
+
+# nix
+.direnv/
+/result
+/result-*
