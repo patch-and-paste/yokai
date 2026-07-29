@@ -1,0 +1,4 @@
+-- tachiyomix extension store index format, introduced alongside extensions-lib 1.6.
+-- Existing repos keep the legacy index.min.json layout until they are refreshed.
+ALTER TABLE extension_repos ADD COLUMN is_legacy INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE extension_repos ADD COLUMN extension_list_url TEXT;

@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.data.library.CustomMangaManager
 import eu.kanade.tachiyomi.domain.manga.models.Manga
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import eu.kanade.tachiyomi.util.EMPTY
+import kotlinx.serialization.json.JsonObject
 import uy.kohesive.injekt.injectLazy
 
 open class MangaImpl(
@@ -69,6 +71,8 @@ open class MangaImpl(
     override var date_added: Long = 0
 
     override var update_strategy: UpdateStrategy = UpdateStrategy.ALWAYS_UPDATE
+
+    override var memo: JsonObject = JsonObject.EMPTY
 
     // TODO: It's probably fine to set this to non-null string in the future
     override var filtered_scanlators: String? = ""

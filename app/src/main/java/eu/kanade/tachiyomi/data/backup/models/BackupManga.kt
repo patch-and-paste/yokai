@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.util.chapter.ChapterUtil
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
+import yokai.data.jsonObjectAdapter
 import yokai.domain.library.custom.model.CustomMangaInfo
 
 @Suppress("DEPRECATION")
@@ -44,6 +45,9 @@ data class BackupManga(
     @ProtoNumber(104) var history: List<BackupHistory> = emptyList(),
     @ProtoNumber(105) var updateStrategy: UpdateStrategy = UpdateStrategy.ALWAYS_UPDATE,
     @ProtoNumber(108) var excludedScanlators: List<String> = emptyList(),
+    // Source-provided metadata (extensions-lib 1.6). Stored as the raw JSON text, which is wire
+    // compatible with the `bytes` field upstream uses for the same number.
+    @ProtoNumber(112) var memo: String = "{}",
 
     // SY specific values
     @ProtoNumber(602) var customStatus: Int = 0,
@@ -77,6 +81,7 @@ data class BackupManga(
                 ?: -1
             chapter_flags = this@BackupManga.chapterFlags
             update_strategy = this@BackupManga.updateStrategy
+            memo = jsonObjectAdapter.decode(this@BackupManga.memo)
         }
     }
 
@@ -132,6 +137,7 @@ data class BackupManga(
                 chapterFlags = manga.chapter_flags,
                 updateStrategy = manga.update_strategy,
                 excludedScanlators = ChapterUtil.getScanlators(manga.filtered_scanlators),
+                memo = jsonObjectAdapter.encode(manga.memo),
             ).also { backupManga ->
                 customMangaManager?.getManga(manga)?.let {
                     backupManga.customTitle = it.title

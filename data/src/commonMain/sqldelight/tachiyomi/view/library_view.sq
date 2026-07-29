@@ -19,12 +19,12 @@ LEFT JOIN (
         coalesce(max(history.history_last_read), 0) AS lastRead,
         coalesce(max(chapters.date_fetch), 0) AS lastFetch
     FROM chapters
-    LEFT JOIN scanlators_view AS filtered_scanlators
+    LEFT JOIN excluded_scanlators AS filtered_scanlators
     ON chapters.manga_id = filtered_scanlators.manga_id
-    AND chapters.scanlator = filtered_scanlators.name
+    AND chapters.scanlator = filtered_scanlators.scanlator
     LEFT JOIN history
     ON chapters._id = history.history_chapter_id
-    WHERE filtered_scanlators.name IS NULL
+    WHERE filtered_scanlators.scanlator IS NULL
     GROUP BY chapters.manga_id
 ) AS C
 ON M._id = C.manga_id

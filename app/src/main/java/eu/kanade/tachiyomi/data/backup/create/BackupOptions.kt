@@ -15,6 +15,7 @@ data class BackupOptions(
     val customInfo: Boolean = true,
     val readManga: Boolean = true,
     val includePrivate: Boolean = false,
+    val extensionRepos: Boolean = true,
 ) {
     fun asBooleanArray() = booleanArrayOf(
         libraryEntries,
@@ -27,6 +28,7 @@ data class BackupOptions(
         customInfo,
         readManga,
         includePrivate,
+        extensionRepos,
     )
 
     companion object {
@@ -41,6 +43,7 @@ data class BackupOptions(
             MR.strings.custom_manga_info,
             MR.strings.all_read_manga,
             MR.strings.backup_private_pref,
+            MR.strings.source_repos,
         )
 
         fun getEntries() = persistentListOf(
@@ -99,19 +102,26 @@ data class BackupOptions(
                 getter = BackupOptions::includePrivate,
                 setter = { options, enabled -> options.copy(includePrivate = enabled) },
             ),
+            Entry(
+                label = MR.strings.source_repos,
+                getter = BackupOptions::extensionRepos,
+                setter = { options, enabled -> options.copy(extensionRepos = enabled) },
+            ),
         )
 
+        // Jobs queued before an option was added still carry the shorter array
         fun fromBooleanArray(array: BooleanArray): BackupOptions = BackupOptions(
-            array[0],
-            array[1],
-            array[2],
-            array[3],
-            array[4],
-            array[5],
-            array[6],
-            array[7],
-            array[8],
-            array[9],
+            libraryEntries = array.getOrElse(0) { true },
+            categories = array.getOrElse(1) { true },
+            chapters = array.getOrElse(2) { true },
+            tracking = array.getOrElse(3) { true },
+            history = array.getOrElse(4) { true },
+            appPrefs = array.getOrElse(5) { true },
+            sourcePrefs = array.getOrElse(6) { true },
+            customInfo = array.getOrElse(7) { true },
+            readManga = array.getOrElse(8) { true },
+            includePrivate = array.getOrElse(9) { false },
+            extensionRepos = array.getOrElse(10) { true },
         )
     }
 

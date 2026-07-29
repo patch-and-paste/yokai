@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.source.model
 
 import java.io.Serializable
+import kotlinx.serialization.json.JsonObject
 
 interface SManga : Serializable {
 
@@ -22,6 +23,20 @@ interface SManga : Serializable {
 
     var update_strategy: UpdateStrategy
 
+    /**
+     * Extra metadata associated with the manga.
+     *
+     * The JSON object is not visible to users and intended for internal or source-specific
+     * purposes. Apps may define their own namespaced keys (e.g., `"yokai.*"`) for sources to
+     * populate.
+     *
+     * This allows apps to attach and ask for custom information without affecting the visible
+     * manga data.
+     *
+     * @since extensions-lib 1.6
+     */
+    var memo: JsonObject
+
     var initialized: Boolean
 
     fun getGenres(): List<String>? {
@@ -38,6 +53,8 @@ interface SManga : Serializable {
         it.genre = genre
         it.status = status
         it.thumbnail_url = thumbnail_url
+        it.update_strategy = update_strategy
+        it.memo = memo
         it.initialized = initialized
     }
 

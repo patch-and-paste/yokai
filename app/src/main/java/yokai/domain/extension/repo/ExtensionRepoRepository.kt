@@ -9,29 +9,15 @@ interface ExtensionRepoRepository {
     suspend fun getRepository(baseUrl: String): ExtensionRepo?
     suspend fun getRepositoryBySigningKeyFingerprint(fingerprint: String): ExtensionRepo?
     fun getCount(): Flow<Int>
-    suspend fun insertRepository(
-        baseUrl: String,
-        name: String,
-        shortName: String?,
-        website: String,
-        signingKeyFingerprint: String,
-    )
-    suspend fun upsertRepository(
-        baseUrl: String,
-        name: String,
-        shortName: String?,
-        website: String,
-        signingKeyFingerprint: String,
-    )
-    suspend fun upsertRepository(repo: ExtensionRepo) {
-        upsertRepository(
-            baseUrl = repo.baseUrl,
-            name = repo.name,
-            shortName = repo.shortName,
-            website = repo.website,
-            signingKeyFingerprint = repo.signingKeyFingerprint,
-        )
-    }
+    suspend fun insertRepository(repo: ExtensionRepo)
+    suspend fun upsertRepository(repo: ExtensionRepo)
     suspend fun replaceRepository(newRepo: ExtensionRepo)
+
+    /**
+     * Moves a repo to a new [ExtensionRepo.baseUrl] in one transaction. Deleting first is
+     * required because the old row holds the unique signing key fingerprint, so the two halves
+     * must not be separately abortable.
+     */
+    suspend fun migrateRepository(oldBaseUrl: String, newRepo: ExtensionRepo)
     suspend fun deleteRepository(baseUrl: String)
 }

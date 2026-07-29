@@ -29,6 +29,7 @@ import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.data.preference.SharedPreferencesDataStore
 import eu.kanade.tachiyomi.databinding.ExtensionDetailControllerBinding
 import eu.kanade.tachiyomi.extension.model.Extension
+import eu.kanade.tachiyomi.extension.model.ExtensionRepoStatus
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.Source
@@ -41,9 +42,12 @@ import eu.kanade.tachiyomi.ui.setting.defaultValue
 import eu.kanade.tachiyomi.ui.setting.onChange
 import eu.kanade.tachiyomi.ui.setting.switchPreference
 import eu.kanade.tachiyomi.util.system.LocaleHelper
+import eu.kanade.tachiyomi.util.system.materialAlertDialog
+import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.view.openInBrowser
 import eu.kanade.tachiyomi.util.view.scrollViewWith
 import eu.kanade.tachiyomi.util.view.setAction
+import eu.kanade.tachiyomi.util.view.setPositiveButton
 import eu.kanade.tachiyomi.util.view.snack
 import eu.kanade.tachiyomi.widget.LinearLayoutManagerAccurateOffset
 import eu.kanade.tachiyomi.widget.TachiyomiTextInputEditText.Companion.setIncognito
@@ -58,6 +62,7 @@ import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import yokai.i18n.MR
 import yokai.util.lang.getString
+import android.R as AR
 
 @SuppressLint("RestrictedApi")
 class ExtensionDetailsController(bundle: Bundle? = null) :
@@ -126,12 +131,61 @@ class ExtensionDetailsController(bundle: Bundle? = null) :
         screen.setShouldUseGeneratedIds(true)
         val extHeaderAdapter = ExtensionDetailsHeaderAdapter(presenter)
         extHeaderAdapter.setHasStableIds(true)
+        val reposAdapter = ExtensionReposAdapter(::onRepoActionClick)
+        reposAdapter.setHasStableIds(true)
         binding.extensionPrefsRecycler.adapter = ConcatAdapter(
             concatAdapterConfig,
             extHeaderAdapter,
+            reposAdapter,
             PreferenceGroupAdapter(screen),
         )
         binding.extensionPrefsRecycler.addItemDecoration(ExtensionSettingsDividerItemDecoration(context))
+
+        presenter.repoStatuses
+            .onEach { reposAdapter.setStatuses(it) }
+            .launchIn(viewScope)
+    }
+
+    /**
+     * Installs the extension from the tapped repo, confirming first when Android can't replace the
+     * APK in place and the current one has to go.
+     */
+    private fun onRepoActionClick(status: ExtensionRepoStatus) {
+        val activity = activity ?: return
+        val extension = presenter.extension ?: return
+
+        if (!status.requiresReinstall) {
+            // The details screen has no install progress indicator.
+            activity.toast(MR.strings.installing)
+            presenter.installFrom(status)
+            return
+        }
+
+        val confirmLabel = when (status.action) {
+            ExtensionRepoStatus.Action.DOWNGRADE -> MR.strings.action_downgrade
+            else -> MR.strings.action_switch_repo
+        }
+        activity.materialAlertDialog()
+            .setTitle(activity.getString(MR.strings.switch_extension_repo_title, status.repoName))
+            .setMessage(
+                activity.getString(
+                    MR.strings.switch_extension_repo_message,
+                    extension.name,
+                    status.repoName,
+                ),
+            )
+            .setPositiveButton(confirmLabel) { _, _ ->
+                activity.toast(
+                    activity.getString(
+                        MR.strings.switching_extension_repo,
+                        extension.name,
+                        status.repoName,
+                    ),
+                )
+                presenter.installFrom(status)
+            }
+            .setNegativeButton(AR.string.cancel, null)
+            .show()
     }
 
     override fun onDestroyView(view: View) {

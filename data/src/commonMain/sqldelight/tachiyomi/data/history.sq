@@ -35,13 +35,6 @@ JOIN chapters
 ON history.history_chapter_id = chapters._id
 WHERE chapters.manga_id = :mangaId AND history.history_chapter_id = chapters._id;
 
-getByChapterUrl:
-SELECT history.*
-FROM history
-JOIN chapters
-ON history.history_chapter_id = chapters._id
-WHERE chapters.url = :chapterUrl AND history.history_chapter_id = chapters._id;
-
 getTotalReadDuration:
 SELECT sum(history_time_read) FROM history;
 
@@ -67,12 +60,12 @@ ON M._id = C.manga_id
 JOIN history AS H
 ON C._id = H.history_chapter_id
 AND H.history_last_read > 0
-LEFT JOIN scanlators_view AS S
+LEFT JOIN excluded_scanlators AS S
 ON C.manga_id = S.manga_id
-AND C.scanlator = S.name
+AND C.scanlator = S.scanlator
 WHERE lower(M.title) LIKE '%' || :search || '%'
 AND (
-    :apply_filter = 0 OR S.name IS NULL
+    :apply_filter = 0 OR S.scanlator IS NULL
 )
 ORDER BY H.history_last_read DESC
 LIMIT :limit OFFSET :offset;
@@ -99,12 +92,12 @@ JOIN (
 ON C.manga_id = max_last_read.manga_id
 AND max_last_read.history_chapter_id = H.history_chapter_id
 AND max_last_read.history_last_read > 0
-LEFT JOIN scanlators_view AS S
+LEFT JOIN excluded_scanlators AS S
 ON C.manga_id = S.manga_id
-AND C.scanlator = S.name
+AND C.scanlator = S.scanlator
 WHERE lower(M.title) LIKE '%' || :search || '%'
 AND (
-    :apply_filter = 0 OR S.name IS NULL
+    :apply_filter = 0 OR S.scanlator IS NULL
 )
 ORDER BY max_last_read.history_last_read DESC
 LIMIT :limit OFFSET :offset;
@@ -149,12 +142,12 @@ JOIN (
 ON C.manga_id = max_last_read.manga_id
 AND max_last_read.history_chapter_id = history.history_chapter_id
 AND max_last_read.history_last_read > 0
-LEFT JOIN scanlators_view AS S
+LEFT JOIN excluded_scanlators AS S
 ON C.manga_id = S.manga_id
-AND C.scanlator = S.name
+AND C.scanlator = S.scanlator
 WHERE lower(title) LIKE '%' || :search || '%'
 AND (
-    :apply_filter = 0 OR S.name IS NULL
+    :apply_filter = 0 OR S.scanlator IS NULL
 )
 
 UNION  -- Newly fetched chapter
@@ -180,15 +173,15 @@ JOIN (
     GROUP BY C2.manga_id
 ) AS newest_chapter
 ON C.manga_id = newest_chapter.manga_id
-LEFT JOIN scanlators_view AS S
+LEFT JOIN excluded_scanlators AS S
 ON C.manga_id = S.manga_id
-AND C.scanlator = S.name
+AND C.scanlator = S.scanlator
 WHERE favorite = 1
 AND C._id = newest_chapter._id
 AND C.date_fetch > M.date_added
 AND lower(title) LIKE '%' || :search || '%'
 AND (
-    :apply_filter = 0 OR S.name IS NULL
+    :apply_filter = 0 OR S.scanlator IS NULL
 )
 
 UNION  -- Newly added manga
@@ -215,7 +208,8 @@ JOIN (
         NULL AS last_page_read,
         NULL AS pages_left,
         NULL AS chapter_number,
-        NULL AS source_order
+        NULL AS source_order,
+        NULL AS memo
 ) AS C
 WHERE favorite = 1
 AND lower(title) LIKE '%' || :search || '%'

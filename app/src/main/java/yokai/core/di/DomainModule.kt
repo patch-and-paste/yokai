@@ -21,6 +21,7 @@ import yokai.domain.chapter.interactor.GetAvailableScanlators
 import yokai.domain.chapter.interactor.GetChapter
 import yokai.domain.chapter.interactor.InsertChapter
 import yokai.domain.chapter.interactor.UpdateChapter
+import yokai.domain.extension.interactor.ExtensionInstallSources
 import yokai.domain.extension.interactor.TrustExtension
 import yokai.domain.extension.repo.ExtensionRepoRepository
 import yokai.domain.extension.repo.interactor.CreateExtensionRepo
@@ -55,6 +56,7 @@ import yokai.domain.track.interactor.InsertTrack
 
 fun domainModule() = module {
     factory { TrustExtension(get(), get()) }
+    factory { ExtensionInstallSources(get()) }
 
     single<CategoryRepository> { CategoryRepositoryImpl(get()) }
     factory { DeleteCategories(get()) }

@@ -8,12 +8,10 @@ import eu.kanade.tachiyomi.data.database.models.History
 import eu.kanade.tachiyomi.data.database.models.MangaCategory
 import eu.kanade.tachiyomi.data.database.models.Track
 import eu.kanade.tachiyomi.data.library.CustomMangaManager
-import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.domain.manga.models.Manga
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.chapter.ChapterUtil
 import eu.kanade.tachiyomi.util.manga.MangaUtil
-import eu.kanade.tachiyomi.util.system.launchNow
 import kotlin.math.max
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -64,26 +62,29 @@ class MangaBackupRestorer(
         val filteredScanlators = backupManga.excludedScanlators
 
         try {
-            val dbManga = getManga.awaitByUrlAndSource(manga.url, manga.source)
-            if (dbManga == null) {
-                // Manga not in database
-                restoreNewManga(manga, chapters, categories, history, tracks, backupCategories, filteredScanlators, customManga)
-            } else {
-                // Manga in database
-                // Copy information from manga already in database
-                manga.id = dbManga.id
-                manga.filtered_scanlators = dbManga.filtered_scanlators
-                manga.copyFrom(dbManga)
-                updateManga.await(manga.toMangaUpdate())
-                // Fetch rest of manga information
-                restoreExistingManga(manga, chapters, categories, history, tracks, backupCategories, filteredScanlators, customManga)
+            // Keep every change for one manga in one transaction to avoid partial restores and
+            // repeated query notifications.
+            handler.await(inTransaction = true) {
+                val dbManga = getManga.awaitByUrlAndSource(manga.url, manga.source)
+                if (dbManga == null) {
+                    // Manga not in database
+                    restoreNewManga(manga, chapters, categories, history, tracks, backupCategories, filteredScanlators, customManga)
+                } else {
+                    // Manga in database
+                    // Copy information from manga already in database
+                    manga.id = dbManga.id
+                    manga.filtered_scanlators = dbManga.filtered_scanlators
+                    manga.copyFrom(dbManga)
+                    updateManga.await(manga.toMangaUpdate())
+                    // Fetch rest of manga information
+                    restoreExistingManga(manga, chapters, categories, history, tracks, backupCategories, filteredScanlators, customManga)
+                }
             }
         } catch (e: Exception) {
             onError(manga, e)
         }
 
         onComplete(manga)
-        LibraryUpdateJob.updateMutableFlow.tryEmit(manga.id)
     }
 
     /**
@@ -109,8 +110,8 @@ class MangaBackupRestorer(
         }
         fetchedManga.id ?: return
 
-        restoreChapters(fetchedManga, chapters)
-        restoreExtras(fetchedManga, categories, history, tracks, backupCategories, filteredScanlators, customManga)
+        val chapterIdsByUrl = restoreChapters(fetchedManga, chapters)
+        restoreExtras(fetchedManga, categories, history, tracks, backupCategories, filteredScanlators, customManga, chapterIdsByUrl)
     }
 
     private suspend fun restoreExistingManga(
@@ -123,11 +124,12 @@ class MangaBackupRestorer(
         filteredScanlators: List<String>,
         customManga: CustomMangaInfo?,
     ) {
-        restoreChapters(backupManga, chapters)
-        restoreExtras(backupManga, categories, history, tracks, backupCategories, filteredScanlators, customManga)
+        val chapterIdsByUrl = restoreChapters(backupManga, chapters)
+        restoreExtras(backupManga, categories, history, tracks, backupCategories, filteredScanlators, customManga, chapterIdsByUrl)
     }
 
-    private suspend fun restoreChapters(manga: Manga, chapters: List<Chapter>) {
+    /** Restores the manga's chapters and returns a map from chapter URL to ID for history matching. */
+    private suspend fun restoreChapters(manga: Manga, chapters: List<Chapter>): Map<String, Long> {
         val dbChapters = getChapter.awaitAll(manga)
 
         chapters.forEach { chapter ->
@@ -149,9 +151,14 @@ class MangaBackupRestorer(
             chapter.manga_id = manga.id
         }
 
-        val newChapters = chapters.groupBy { it.id != null }
-        newChapters[true]?.let { updateChapter.awaitAll(it.map(Chapter::toProgressUpdate)) }
-        newChapters[false]?.let { insertChapter.awaitBulk(it) }
+        val (existingChapters, newChapters) = chapters.partition { it.id != null }
+        if (existingChapters.isNotEmpty()) updateChapter.awaitAll(existingChapters.map(Chapter::toProgressUpdate))
+        val insertedChapters = if (newChapters.isNotEmpty()) insertChapter.awaitBulk(newChapters) else emptyList()
+
+        return buildMap(chapters.size) {
+            existingChapters.forEach { chapter -> chapter.id?.let { put(chapter.url, it) } }
+            insertedChapters.forEach { chapter -> chapter.id?.let { put(chapter.url, it) } }
+        }
     }
 
     private suspend fun restoreExtras(
@@ -162,16 +169,17 @@ class MangaBackupRestorer(
         backupCategories: List<BackupCategory>,
         filteredScanlators: List<String>,
         customManga: CustomMangaInfo?,
+        chapterIdsByUrl: Map<String, Long>,
     ) {
         restoreCategories(manga, categories, backupCategories)
-        restoreHistoryForManga(history)
+        restoreHistoryForManga(manga.id!!, history, chapterIdsByUrl)
         restoreTrackForManga(manga, tracks)
         restoreFilteredScanlatorsForManga(manga, filteredScanlators)
         customManga?.let {
             it.mangaId = manga.id!!
-            launchNow {
-                customMangaManager.saveMangaInfo(it)
-            }
+            // Called directly rather than through launchNow, which would resume on the main
+            // dispatcher and escape the transaction this runs in
+            customMangaManager.saveMangaInfo(it)
         }
     }
 
@@ -205,13 +213,29 @@ class MangaBackupRestorer(
     /**
      * Restore history from Json
      *
+     * Resolves restored chapter IDs from [chapterIdsByUrl] and scopes existing history to [mangaId].
+     *
+     * @param mangaId id of the manga the history belongs to
      * @param history list containing history to be restored
+     * @param chapterIdsByUrl mapping from chapter URL to ID for the chapters restored for this manga
      */
-    internal suspend fun restoreHistoryForManga(history: List<BackupHistory>) {
+    internal suspend fun restoreHistoryForManga(
+        mangaId: Long,
+        history: List<BackupHistory>,
+        chapterIdsByUrl: Map<String, Long>,
+    ) {
+        if (history.isEmpty()) return
+
+        val dbHistoryByChapterId = getHistory.awaitAllByMangaId(mangaId).associateBy { it.chapter_id }
+
         // List containing history to be updated
         val historyToBeUpdated = ArrayList<History>(history.size)
         for ((url, lastRead, readDuration) in history) {
-            val dbHistory = handler.awaitOneOrNull { historyQueries.getByChapterUrl(url, History::mapper) }
+            // Fall back to a lookup for entries pointing outside this manga's restored chapters,
+            // which is an indexed query now that chapters.url is indexed
+            val chapterId = chapterIdsByUrl[url] ?: getChapter.awaitByUrl(url, false)?.id ?: continue
+
+            val dbHistory = dbHistoryByChapterId[chapterId]
             // Check if history already in database and update
             if (dbHistory != null) {
                 dbHistory.apply {
@@ -221,13 +245,13 @@ class MangaBackupRestorer(
                 historyToBeUpdated.add(dbHistory)
             } else {
                 // If not in database create
-                getChapter.awaitByUrl(url, false)?.let {
-                    val historyToAdd = History.create(it).apply {
+                historyToBeUpdated.add(
+                    History.create().apply {
+                        chapter_id = chapterId
                         last_read = lastRead
                         time_read = readDuration
-                    }
-                    historyToBeUpdated.add(historyToAdd)
-                }
+                    },
+                )
             }
         }
         upsertHistory.awaitBulk(historyToBeUpdated)
@@ -277,7 +301,10 @@ class MangaBackupRestorer(
     }
 
     private suspend fun restoreFilteredScanlatorsForManga(manga: Manga, filteredScanlators: List<String>) {
-        val actualList = ChapterUtil.getScanlators(manga.filtered_scanlators) + filteredScanlators
-        MangaUtil.setScanlatorFilter(updateManga, manga, actualList.toSet())
+        val existing = ChapterUtil.getScanlators(manga.filtered_scanlators)
+        // Skip the write entirely when there is no filter on either side, which is the common case
+        if (existing.isEmpty() && filteredScanlators.isEmpty()) return
+
+        MangaUtil.setScanlatorFilter(updateManga, manga, (existing + filteredScanlators).toSet())
     }
 }

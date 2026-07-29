@@ -87,6 +87,7 @@ suspend fun syncChaptersWithSource(
         if (chapter.url in managedUrls) continue
 
         if (source is HttpSource) {
+            @Suppress("DEPRECATION")
             source.prepareNewChapter(chapter, manga)
         }
         chapter.chapter_number = ChapterRecognition.parseChapterNumber(chapter.name, manga.title, chapter.chapter_number)
@@ -110,6 +111,7 @@ suspend fun syncChaptersWithSource(
                     dateUpload = chapter.date_upload,
                     chapterNumber = chapter.chapter_number.toDouble(),
                     sourceOrder = chapter.source_order.toLong(),
+                    memo = chapter.memo,
                 )
                 toChange.add(update)
             }
@@ -225,5 +227,6 @@ private fun shouldUpdateDbChapter(dbChapter: Chapter, sourceChapter: Chapter): B
         dbChapter.name != sourceChapter.name ||
         dbChapter.date_upload != sourceChapter.date_upload ||
         dbChapter.chapter_number != sourceChapter.chapter_number ||
-        dbChapter.source_order != sourceChapter.source_order
+        dbChapter.source_order != sourceChapter.source_order ||
+        dbChapter.memo != sourceChapter.memo
 }

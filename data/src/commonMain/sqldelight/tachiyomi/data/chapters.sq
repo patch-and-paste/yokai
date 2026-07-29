@@ -14,22 +14,26 @@ CREATE TABLE chapters(
     source_order INTEGER NOT NULL,
     date_fetch INTEGER NOT NULL,
     date_upload INTEGER NOT NULL,
+    memo TEXT NOT NULL DEFAULT '{}',
     FOREIGN KEY(manga_id) REFERENCES mangas (_id)
     ON DELETE CASCADE
 );
 
 CREATE INDEX chapters_manga_id_index ON chapters(manga_id);
 CREATE INDEX chapters_unread_by_manga_index ON chapters(manga_id, read) WHERE read = 0;
+-- Lookups by url happen once per history entry during a backup restore; without this they
+-- degrade into a full scan of the whole chapters table.
+CREATE INDEX chapters_url_index ON chapters(url);
 
 getChaptersByMangaId:
 SELECT C.*
 FROM chapters AS C
-LEFT JOIN scanlators_view AS S
+LEFT JOIN excluded_scanlators AS S
 ON C.manga_id = S.manga_id
-AND C.scanlator = S.name
+AND C.scanlator = S.scanlator
 WHERE C.manga_id = :manga_id
 AND (
-    :apply_filter = 0 OR S.name IS NULL
+    :apply_filter = 0 OR S.scanlator IS NULL
 );
 
 getChaptersById:
@@ -39,34 +43,34 @@ WHERE _id = :id;
 getChaptersByUrl:
 SELECT C.*
 FROM chapters AS C
-LEFT JOIN scanlators_view AS S
+LEFT JOIN excluded_scanlators AS S
 ON C.manga_id = S.manga_id
-AND C.scanlator = S.name
+AND C.scanlator = S.scanlator
 WHERE C.url = :url
 AND (
-    :apply_filter = 0 OR S.name IS NULL
+    :apply_filter = 0 OR S.scanlator IS NULL
 );
 
 getChaptersByUrlAndMangaId:
 SELECT C.*
 FROM chapters AS C
-LEFT JOIN scanlators_view AS S
+LEFT JOIN excluded_scanlators AS S
 ON C.manga_id = S.manga_id
-AND C.scanlator = S.name
+AND C.scanlator = S.scanlator
 WHERE C.url = :url AND C.manga_id = :manga_id
 AND (
-    :apply_filter = 0 OR S.name IS NULL
+    :apply_filter = 0 OR S.scanlator IS NULL
 );
 
 findUnreadByMangaId:
 SELECT C.*
 FROM chapters AS C
-LEFT JOIN scanlators_view AS S
+LEFT JOIN excluded_scanlators AS S
 ON C.manga_id = S.manga_id
-AND C.scanlator = S.name
+AND C.scanlator = S.scanlator
 WHERE C.manga_id = :manga_id AND C.read = 0
 AND (
-    :apply_filter = 0 OR S.name IS NULL
+    :apply_filter = 0 OR S.scanlator IS NULL
 );
 
 getRecents:
@@ -76,14 +80,14 @@ SELECT
 FROM mangas AS M
 JOIN chapters AS C
 ON M._id = C.manga_id
-LEFT JOIN scanlators_view AS S
+LEFT JOIN excluded_scanlators AS S
 ON C.manga_id = S.manga_id
-AND C.scanlator = S.name
+AND C.scanlator = S.scanlator
 WHERE M.favorite = 1
 AND C.date_fetch > M.date_added
 AND lower(M.title) LIKE '%' || :search || '%'
 AND (
-    :apply_filter = 0 OR S.name IS NULL
+    :apply_filter = 0 OR S.scanlator IS NULL
 )
 ORDER BY C.date_fetch DESC
 LIMIT :limit OFFSET :offset;
@@ -110,7 +114,8 @@ UPDATE chapters SET
     chapter_number = coalesce(:chapterNumber, chapter_number),
     source_order = coalesce(:sourceOrder, source_order),
     date_fetch = coalesce(:dateFetch, date_fetch),
-    date_upload = coalesce(:dateUpload, date_upload)
+    date_upload = coalesce(:dateUpload, date_upload),
+    memo = coalesce(:memo, memo)
 WHERE _id = :chapterId;
 
 fixSourceOrder:
@@ -118,8 +123,8 @@ UPDATE chapters SET source_order = :sourceOrder
 WHERE url = :url AND manga_id = :mangaId;
 
 insert:
-INSERT INTO chapters (manga_id, url, name, scanlator, read, bookmark, last_page_read, pages_left, chapter_number, source_order, date_fetch, date_upload)
-VALUES (:mangaId, :url, :name, :scanlator, :read, :bookmark, :lastPageRead, :pagesLeft, :chapterNumber, :sourceOrder, :dateFetch, :dateUpload);
+INSERT INTO chapters (manga_id, url, name, scanlator, read, bookmark, last_page_read, pages_left, chapter_number, source_order, date_fetch, date_upload, memo)
+VALUES (:mangaId, :url, :name, :scanlator, :read, :bookmark, :lastPageRead, :pagesLeft, :chapterNumber, :sourceOrder, :dateFetch, :dateUpload, :memo);
 
 selectLastInsertedRowId:
 SELECT last_insert_rowid();

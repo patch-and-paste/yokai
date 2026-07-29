@@ -41,6 +41,7 @@ import eu.kanade.tachiyomi.extension.ExtensionUpdateJob
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.SourceManager
 import eu.kanade.tachiyomi.source.UnmeteredSource
+import eu.kanade.tachiyomi.source.awaitMangaUpdate
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -273,7 +274,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                         )
                         ensureActive()
                         val networkManga = try {
-                            source.getMangaDetails(manga.manga.copy())
+                            source.awaitMangaUpdate(manga.manga.copy(), fetchDetails = true).manga
                         } catch (e: java.lang.Exception) {
                             Logger.e(e)
                             null
@@ -414,7 +415,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             var hasDownloads = false
             ensureActive()
             notifier.showProgressNotification(manga.manga, progress, mangaToUpdate.size)
-            val fetchedChapters = source.getChapterList(manga.manga.copy())
+            val fetchedChapters = source.awaitMangaUpdate(
+                manga = manga.manga.copy(),
+                chapters = getChapter.awaitAll(manga.manga.id!!, false),
+                fetchChapters = true,
+            ).chapters
 
             if (fetchedChapters.isNotEmpty()) {
                 val newChapters = syncChaptersWithSource(fetchedChapters, manga.manga, source)
@@ -641,6 +646,13 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
          */
         private const val KEY_CATEGORY = "category"
         const val STARTING_UPDATE_SOURCE = -5L
+
+        /**
+         * Emitted once when many entries changed at the same time, such as after a backup restore.
+         * Collectors should reload whatever they are showing instead of reacting to a single entry,
+         * which is why entry-scoped collectors need to watch for this alongside their own id.
+         */
+        const val BULK_CHANGE = -6L
 
         /**
          * Key that defines what should be updated.

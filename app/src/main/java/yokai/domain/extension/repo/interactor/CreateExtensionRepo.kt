@@ -12,7 +12,8 @@ import yokai.domain.extension.repo.service.ExtensionRepoService
 class CreateExtensionRepo(
     private val extensionRepoRepository: ExtensionRepoRepository
 ) {
-    private val repoRegex = """^https://.*/index\.min\.json$""".toRegex()
+    // Accept any HTTPS URL; fetchRepoDetails validates the response format.
+    private val repoRegex = """^https://\S+$""".toRegex()
 
     private val networkService: NetworkHelper by injectLazy()
 
@@ -26,19 +27,12 @@ class CreateExtensionRepo(
             return Result.InvalidUrl
         }
 
-        val baseUrl = repoUrl.removeSuffix("/index.min.json")
-        return extensionRepoService.fetchRepoDetails(baseUrl)?.let { insert(it) } ?: Result.InvalidUrl
+        return extensionRepoService.fetchRepoDetails(repoUrl)?.let { insert(it) } ?: Result.InvalidUrl
     }
 
     private suspend fun insert(repo: ExtensionRepo): Result {
         return try {
-            extensionRepoRepository.insertRepository(
-                repo.baseUrl,
-                repo.name,
-                repo.shortName,
-                repo.website,
-                repo.signingKeyFingerprint,
-            )
+            extensionRepoRepository.insertRepository(repo)
             Result.Success
         } catch (e: SaveExtensionRepoException) {
             Logger.e(e) { "SQL Conflict attempting to add new repository ${repo.baseUrl}" }

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.extension.installer.ShizukuInstaller
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.model.InstallStep
 import eu.kanade.tachiyomi.extension.model.LoadResult
+import eu.kanade.tachiyomi.extension.model.pickExtensionCandidate
 import eu.kanade.tachiyomi.extension.util.ExtensionInstallReceiver
 import eu.kanade.tachiyomi.extension.util.ExtensionInstaller
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
@@ -22,15 +23,24 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.parcelize.Parcelize
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import yokai.domain.base.BasePreferences
+import yokai.domain.extension.interactor.ExtensionInstallSources
 import yokai.domain.extension.interactor.TrustExtension
+import yokai.domain.extension.repo.interactor.GetExtensionRepo
+import yokai.domain.extension.repo.model.ExtensionRepo
 
 /**
  * The manager of extensions installed as another apk which extend the available sources. It handles
@@ -46,12 +56,17 @@ class ExtensionManager(
     private val context: Context,
     private val preferences: PreferencesHelper = Injekt.get(),
     private val trustExtension: TrustExtension = Injekt.get(),
+    private val installSources: ExtensionInstallSources = Injekt.get(),
+    private val getExtensionRepo: GetExtensionRepo = Injekt.get(),
 ) {
 
     /**
      * API where all the available extensions can be found.
      */
     private val api = ExtensionApi()
+
+    /** Outlives the screen that starts a repo switch, since that screen closes on the uninstall. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * The installer which installs, updates and uninstalls the extensions.
@@ -110,6 +125,16 @@ class ExtensionManager(
     private val _untrustedExtensionsFlow = MutableStateFlow(emptyList<Extension.Untrusted>())
     val untrustedExtensionsFlow = _untrustedExtensionsFlow.asStateFlow()
 
+    /**
+     * The added repos as of the last [findAvailableExtensions], in the order they were added. Needed
+     * to tell apart two repos offering the same package.
+     */
+    var repos: List<ExtensionRepo> = emptyList()
+        private set
+
+    /** Repo an install was started from, promoted to [installSources] once it lands. */
+    private val pendingInstallRepo = hashMapOf<String, String>()
+
     init {
         initExtensions()
         ExtensionInstallReceiver(InstallationListener()).register(context)
@@ -158,6 +183,7 @@ class ExtensionManager(
      */
     suspend fun findAvailableExtensions() {
         val extensions: List<Extension.Available> = try {
+            repos = getExtensionRepo.getAll()
             api.findExtensions()
         } catch (e: Exception) {
             Logger.e(e) { "Failed to find available extensions" }
@@ -212,6 +238,30 @@ class ExtensionManager(
     fun getStubSource(id: Long) = availableSources[id]
 
     /**
+     * Everything the added repos offer for [pkgName]. More than one entry means several repos carry
+     * the package, which is normal for mirrors and for an extension that has moved home.
+     */
+    fun candidatesFor(pkgName: String): List<Extension.Available> =
+        availableExtensionsFlow.value.filter { it.pkgName == pkgName }
+
+    /**
+     * The listing to install or update [pkgName] from when the user hasn't picked a repo themselves.
+     */
+    fun bestCandidate(pkgName: String, installed: Extension.Installed? = null): Extension.Available? =
+        pickCandidate(
+            candidatesFor(pkgName),
+            installed ?: installedExtensionsFlow.value.find { it.pkgName == pkgName },
+        )
+
+    /** The repo [pkgName] was installed from, or null if it was installed before this was recorded. */
+    fun installSourceOf(pkgName: String): String? = installSources.get(pkgName)
+
+    private fun pickCandidate(
+        candidates: List<Extension.Available>,
+        installed: Extension.Installed?,
+    ): Extension.Available? = pickExtensionCandidate(candidates, installed, repos)
+
+    /**
      * Sets the update field of the installed extensions with the given [availableExtensions].
      *
      * @param availableExtensions The list of extensions given by the [api].
@@ -221,37 +271,30 @@ class ExtensionManager(
             preferences.extensionUpdatesCount().set(0)
             return
         }
-        val mutInstalledExtensions = installedExtensionsFlow.value.toMutableList()
-        var changed = false
-        var hasUpdateCount = 0
-        for ((index, installedExt) in mutInstalledExtensions.withIndex()) {
-            val pkgName = installedExt.pkgName
-            val availableExt = availableExtensions.find { it.pkgName == pkgName }
 
-            if (availableExt == null != installedExt.isObsolete) {
-                mutInstalledExtensions[index] = installedExt.copy(isObsolete = true)
-                changed = true
-            }
-            if (availableExt != null) {
-                val hasUpdate = installedExt.updateExists(availableExt)
-                if (installedExt.hasUpdate != hasUpdate) {
-                    mutInstalledExtensions[index] = installedExt.copy(
-                        hasUpdate = hasUpdate,
-                        repoUrl = availableExt.repoUrl,
-                    )
-                    hasUpdateCount++
-                } else {
-                    mutInstalledExtensions[index] = installedExt.copy(
-                        repoUrl = availableExt.repoUrl,
-                    )
-                }
-                changed = true
-            }
+        val recordedSources = installSources.getAll()
+        val byPkgName = availableExtensions.groupBy { it.pkgName }
+
+        val updated = installedExtensionsFlow.value.map { installedExt ->
+            val candidates = byPkgName[installedExt.pkgName].orEmpty()
+            val best = pickCandidate(candidates, installedExt)
+            val installSource = recordedSources[installedExt.pkgName]
+                ?: repos.singleOrNull { it.signingKeyFingerprint == installedExt.signatureHash }?.baseUrl
+
+            installedExt.copy(
+                hasUpdate = best != null && installedExt.updateExists(best),
+                isObsolete = candidates.isEmpty(),
+                isMoved = candidates.isNotEmpty() &&
+                    installSource != null &&
+                    candidates.none { it.repoUrl == installSource },
+                repoUrl = installSource ?: best?.repoUrl,
+            )
         }
-        if (changed) {
-            _installedExtensionsFlow.value = mutInstalledExtensions
+
+        if (updated != installedExtensionsFlow.value) {
+            _installedExtensionsFlow.value = updated
         }
-        preferences.extensionUpdatesCount().set(installedExtensionsFlow.value.count { it.hasUpdate })
+        preferences.extensionUpdatesCount().set(updated.count { it.hasUpdate })
     }
 
     /**
@@ -262,7 +305,37 @@ class ExtensionManager(
      * @param extension The extension to be installed.
      */
     suspend fun installExtension(extension: ExtensionInfo, scope: CoroutineScope): Flow<ExtensionIntallInfo> {
+        extension.repoUrl?.let { pendingInstallRepo[extension.pkgName] = it }
         return installer.downloadAndInstall(api.getApkUrl(extension), extension, scope)
+    }
+
+    /**
+     * Installs [target] over [installed] when Android won't replace the APK in place, which is the
+     * case for a downgrade or for a repo signing with a different key. The extension is removed
+     * first; source settings live in the app's own preferences and survive that.
+     *
+     * Runs on the manager's own scope because the screen that starts this closes as soon as the
+     * uninstall lands. Progress shows on the extension list like any other install.
+     */
+    fun replaceExtension(installed: Extension.Installed, target: Extension.Available) {
+        scope.launch {
+            uninstallExtension(installed.pkgName)
+
+            // Waiting on the installed list rather than the install events: it replays its current
+            // value, so an uninstall that finishes first isn't missed. A shared extension has to get
+            // past the system's prompt before it lands here at all.
+            val uninstalled = withTimeoutOrNull(UNINSTALL_TIMEOUT_MS) {
+                installedExtensionsFlow.first { extensions ->
+                    extensions.none { it.pkgName == installed.pkgName }
+                }
+            }
+            if (uninstalled == null) {
+                Logger.w { "Gave up switching ${installed.pkgName} repos, it was never uninstalled" }
+                return@launch
+            }
+
+            installExtension(ExtensionInfo(target), this).collect()
+        }
     }
 
     /**
@@ -430,7 +503,15 @@ class ExtensionManager(
         if (untrustedExtension != null) {
             _untrustedExtensionsFlow.value -= untrustedExtension
         }
+        pendingInstallRepo.remove(pkgName)
+        installSources.remove(pkgName)
         installer.emitToFlow("Uninstalled/$pkgName", ExtensionIntallInfo(InstallStep.Done, null))
+    }
+
+    /** Remembers where an install that has just landed came from, for as long as it stays installed. */
+    private fun recordInstallSource(pkgName: String) {
+        val repoUrl = pendingInstallRepo.remove(pkgName) ?: return
+        installSources.set(pkgName, repoUrl)
     }
 
     /**
@@ -439,11 +520,13 @@ class ExtensionManager(
     private inner class InstallationListener : ExtensionInstallReceiver.Listener {
 
         override fun onExtensionInstalled(extension: Extension.Installed) {
+            recordInstallSource(extension.pkgName)
             registerNewExtension(extension.withUpdateCheck())
             preferences.extensionUpdatesCount().set(installedExtensionsFlow.value.count { it.hasUpdate })
         }
 
         override fun onExtensionUpdated(extension: Extension.Installed) {
+            recordInstallSource(extension.pkgName)
             registerUpdatedExtension(extension.withUpdateCheck())
             preferences.extensionUpdatesCount().set(installedExtensionsFlow.value.count { it.hasUpdate })
         }
@@ -474,8 +557,7 @@ class ExtensionManager(
     }
 
     private fun Extension.Installed.updateExists(availableExtension: Extension.Available? = null): Boolean {
-        val availableExt = availableExtension ?: availableExtensionsFlow.value.find { it.pkgName == pkgName }
-            ?: return false
+        val availableExt = availableExtension ?: bestCandidate(pkgName, this) ?: return false
 
         return (availableExt.versionCode > versionCode || availableExt.libVersion > libVersion)
     }
@@ -483,15 +565,17 @@ class ExtensionManager(
     @kotlinx.serialization.Serializable
     @Parcelize
     data class ExtensionInfo(
-        val apkName: String,
+        val apkUrl: String = "",
         val pkgName: String,
         val name: String,
         val versionCode: Long,
         val libVersion: Double,
         val repoUrl: String? = null,
+        /** Only set on payloads written before APK URLs became absolute. */
+        val apkName: String? = null,
     ) : Parcelable {
         constructor(extension: Extension.Available) : this(
-            apkName = extension.apkName,
+            apkUrl = extension.apkUrl,
             pkgName = extension.pkgName,
             name = extension.name,
             versionCode = extension.versionCode,
@@ -501,6 +585,9 @@ class ExtensionManager(
     }
 
     companion object {
+        /** Long enough for the user to work through the system's uninstall prompt. */
+        private const val UNINSTALL_TIMEOUT_MS = 120_000L
+
         fun canAutoInstallUpdates(checkIfShizukuIsRunning: Boolean = false): Boolean {
             val prefs = Injekt.get<BasePreferences>().extensionInstaller().get()
             return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ||

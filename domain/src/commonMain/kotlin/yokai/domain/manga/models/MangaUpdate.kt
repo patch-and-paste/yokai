@@ -1,6 +1,7 @@
 package yokai.domain.manga.models
 
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import kotlinx.serialization.json.JsonObject
 
 data class MangaUpdate(
     val id: Long,
@@ -23,4 +24,5 @@ data class MangaUpdate(
     var hideTitle: Boolean? = null,
     var filteredScanlators: String? = null,
     var coverLastModified: Long? = null,
+    var memo: JsonObject? = null,
 )

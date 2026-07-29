@@ -5,8 +5,11 @@ import eu.kanade.tachiyomi.data.database.models.LibraryManga
 import eu.kanade.tachiyomi.data.database.models.MangaCategory
 import eu.kanade.tachiyomi.data.database.models.mapper
 import eu.kanade.tachiyomi.domain.manga.models.Manga
+import eu.kanade.tachiyomi.util.chapter.ChapterUtil
 import kotlinx.coroutines.flow.Flow
+import yokai.data.Database
 import yokai.data.DatabaseHandler
+import yokai.data.jsonObjectAdapter
 import yokai.data.updateStrategyAdapter
 import yokai.domain.manga.MangaRepository
 import yokai.domain.manga.models.MangaUpdate
@@ -85,14 +88,17 @@ class MangaRepositoryImpl(private val handler: DatabaseHandler) : MangaRepositor
                     filteredScanlators = update.filteredScanlators,
                     updateStrategy = update.updateStrategy?.let(updateStrategyAdapter::encode),
                     coverLastModified = update.coverLastModified,
+                    memo = update.memo?.let(jsonObjectAdapter::encode),
                     mangaId = update.id,
                 )
+                // Null means "leave as is", matching the coalesce in the update statement
+                update.filteredScanlators?.let { syncExcludedScanlators(update.id, it) }
             }
         }
     }
 
     override suspend fun insert(manga: Manga) =
-        handler.awaitOneOrNullExecutable(inTransaction = true) {
+        handler.await(inTransaction = true) {
             mangasQueries.insert(
                 source = manga.source,
                 url = manga.url,
@@ -113,9 +119,24 @@ class MangaRepositoryImpl(private val handler: DatabaseHandler) : MangaRepositor
                 filteredScanlators = manga.filtered_scanlators,
                 updateStrategy = manga.update_strategy.let(updateStrategyAdapter::encode),
                 coverLastModified = manga.cover_last_modified,
+                memo = manga.memo.let(jsonObjectAdapter::encode),
             )
-            mangasQueries.selectLastInsertedRowId()
+            // Read the id before touching any other table, so last_insert_rowid() still refers to the manga
+            val mangaId = mangasQueries.selectLastInsertedRowId().executeAsOne()
+            syncExcludedScanlators(mangaId, manga.filtered_scanlators)
+            mangaId
         }
+
+    /**
+     * Mirrors the serialised [Manga.filtered_scanlators] string into [excluded_scanlators], which is
+     * what the chapter, history and library queries actually join against.
+     */
+    private fun Database.syncExcludedScanlators(mangaId: Long, filteredScanlators: String?) {
+        excluded_scanlatorsQueries.deleteByMangaId(mangaId)
+        ChapterUtil.getScanlators(filteredScanlators).forEach { scanlator ->
+            excluded_scanlatorsQueries.insert(mangaId, scanlator)
+        }
+    }
 
     override suspend fun setCategories(mangaId: Long, categoryIds: List<Long>) =
         handler.await(inTransaction = true) {

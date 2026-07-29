@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.model.InstallStep
 import eu.kanade.tachiyomi.extension.model.InstalledExtensionsOrder
+import eu.kanade.tachiyomi.extension.model.pickExtensionCandidate
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import eu.kanade.tachiyomi.ui.migration.BaseMigrationPresenter
 import eu.kanade.tachiyomi.util.system.LocaleHelper
@@ -110,7 +111,7 @@ class ExtensionBottomPresenter : BaseMigrationPresenter<ExtensionBottomSheet>() 
     private fun toItems(tuple: ExtensionTuple): List<ExtensionItem> {
         val context = view?.context ?: return emptyList()
         val activeLangs = preferences.enabledLanguages().get()
-        val showNsfwSources = preferences.showNsfwSources().get()
+        val allowedContentRating = preferences.extensionContentRating().get()
 
         val (installed, untrusted, available) = tuple
 
@@ -125,13 +126,14 @@ class ExtensionBottomPresenter : BaseMigrationPresenter<ExtensionBottomSheet>() 
             firstLoad = false
         }
 
-        val updatesSorted = installed.filter { it.hasUpdate && (showNsfwSources || !it.isNsfw) }.sortedBy { it.name }
+        val updatesSorted = installed.filter { it.hasUpdate && it.contentRating <= allowedContentRating }.sortedBy { it.name }
         val sortOrder = InstalledExtensionsOrder.fromPreference(preferences)
         val installedSorted = installed
-            .filter { !it.hasUpdate && (showNsfwSources || !it.isNsfw) }
+            .filter { !it.hasUpdate && it.contentRating <= allowedContentRating }
             .sortedWith(
                 compareBy(
-                    { !it.isObsolete },
+                    // Both want a look at the repo list, so float them to the top together
+                    { !it.isObsolete && !it.isMoved },
                     {
                         when (sortOrder) {
                             InstalledExtensionsOrder.Name -> it.name
@@ -150,8 +152,12 @@ class ExtensionBottomPresenter : BaseMigrationPresenter<ExtensionBottomSheet>() 
                 installed.none { it.pkgName == avail.pkgName } &&
                     untrusted.none { it.pkgName == avail.pkgName } &&
                     (avail.lang in activeLangs) &&
-                    (showNsfwSources || !avail.isNsfw)
+                    (avail.contentRating <= allowedContentRating)
             }
+            // Mirrored repos would otherwise put the same extension in the list more than once
+            .groupBy { it.pkgName }
+            .values
+            .mapNotNull { pickExtensionCandidate(it, installed = null, repos = extensionManager.repos) }
             .sortedBy { it.name }
 
         if (updatesSorted.isNotEmpty()) {
@@ -249,8 +255,7 @@ class ExtensionBottomPresenter : BaseMigrationPresenter<ExtensionBottomSheet>() 
     }
 
     fun updateExtension(extension: Extension.Installed) {
-        val availableExt =
-            extensionManager.availableExtensionsFlow.value.find { it.pkgName == extension.pkgName } ?: return
+        val availableExt = extensionManager.bestCandidate(extension.pkgName, extension) ?: return
         installExtension(availableExt)
     }
 
@@ -266,7 +271,7 @@ class ExtensionBottomPresenter : BaseMigrationPresenter<ExtensionBottomSheet>() 
         ExtensionInstallerJob.start(
             context,
             extensions.mapNotNull { extension ->
-                extensionManager.availableExtensionsFlow.value.find { it.pkgName == extension.pkgName }
+                extensionManager.bestCandidate(extension.pkgName, extension)
             },
         )
     }

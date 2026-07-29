@@ -59,12 +59,11 @@ class MangaPlus(delegate: HttpSource) :
                 ?: error("Title not found")
             val trimmedTitle = title.substring(0, title.length - 1)
             val mangaUrl = "#/titles/$titleId"
-            val deferredManga = async {
-                getManga.awaitByUrlAndSource(mangaUrl, delegate.id) ?: getMangaDetailsByUrl(mangaUrl)
-            }
-            val deferredChapters = async { getChapterListByUrl(mangaUrl) }
-            val manga = deferredManga.await()
-            val chapters = deferredChapters.await()
+            val cachedManga = getManga.awaitByUrlAndSource(mangaUrl, delegate.id)
+            // One request for whatever we still need; the delegate serves both halves from it
+            val update = getMangaUpdateByUrl(mangaUrl, fetchDetails = cachedManga == null)
+            val manga = cachedManga ?: update.manga
+            val chapters = update.chapters
             val context = Injekt.get<PreferencesHelper>().context
             val trueChapter = chapters.find { it.url == url }?.toChapter() ?: error(
                 context.getString(MR.strings.chapter_not_found),

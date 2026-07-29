@@ -351,14 +351,33 @@
     <string name="untrusted_extension">Untrusted extension</string>
     <string name="untrusted_extension_message">Malicious extensions can read any stored login credentials or execute arbitrary code.\n\nBy trusting this extension you accept these risks.</string>
     <string name="obsolete_extension_message">This extension is no longer available.</string>
+    <string name="moved">Moved</string>
+    <string name="moved_extension_message">The repo you installed this extension from no longer offers it, but another one does.</string>
     <string name="unofficial_extension_message">This extension is not from the official Tachiyomi extensions list.</string>
+
+    <!-- Extension details: repos offering the extension -->
+    <string name="repos">Repos</string>
+    <string name="repo_installed_from_here">Installed from here</string>
+    <string name="repo_installed_from_here_by_key">Likely installed from here (signing key match)</string>
+    <string name="repo_no_longer_offered">No longer offered here</string>
+    <string name="repo_version_newer">Version %1$s, newer than the installed one</string>
+    <string name="repo_version_same">Version %1$s, the same as the installed one</string>
+    <string name="repo_version_older">Version %1$s, older than the installed one</string>
+    <string name="repo_needs_reinstall">Installing from here removes the current extension first</string>
+    <string name="action_switch_repo">Switch</string>
+    <string name="action_downgrade">Downgrade</string>
+    <string name="switch_extension_repo_title">Install from %1$s?</string>
+    <string name="switch_extension_repo_message">%1$s has to be removed before it can be installed from %2$s.\n\nYour source settings are kept.</string>
+    <string name="switching_extension_repo">Removing %1$s, then installing it from %2$s</string>
     <string name="version_">Version: %1$s</string>
     <string name="language_">Language: %1$s</string>
     <string name="nsfw_short">18+</string>
+    <string name="mixed_short">Mixed</string>
     <string name="installed_">Installed %1$s</string>
     <string name="unofficial">Unofficial</string>
     <string name="extensions_miui_warning">MIUI Optimization must be disabled to install extensions.</string>
     <string name="may_contain_nsfw">May contain NSFW (18+) content</string>
+    <string name="contains_nsfw">Contains NSFW (18+) content</string>
     <string name="app_info">App info</string>
     <string name="_must_be_enabled_first">%1$s must be enabled first</string>
     <string name="could_not_install_extension">Could not install extension</string>
@@ -893,6 +912,12 @@
     <string name="nsfw_sources">NSFW (18+) sources</string>
     <string name="show_in_sources_and_extensions">Show in sources and extensions lists</string>
     <string name="does_not_prevent_unofficial_nsfw">This does not prevent unofficial or potentially incorrectly flagged extensions from surfacing NSFW (18+) content within the app.</string>
+    <string name="content_rating">Content rating</string>
+    <string name="highest_content_rating_to_show">Highest rating to show</string>
+    <string name="content_rating_allow_safe">Safe only</string>
+    <string name="content_rating_allow_mixed">Safe and mixed</string>
+    <string name="content_rating_allow_nsfw">All, including NSFW (18+)</string>
+    <string name="content_rating_only_applies_to_declared">Extensions built before extension lib 1.6 only declare whether they are NSFW, so they are shown as either safe or NSFW.</string>
 
     <!-- Extension repos -->
     <string name="source_repos">Extension Repos</string>

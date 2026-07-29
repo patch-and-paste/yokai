@@ -10,6 +10,7 @@ import androidx.core.content.pm.PackageInfoCompat
 import co.touchlab.kermit.Logger
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
+import eu.kanade.tachiyomi.extension.model.ContentRating
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.model.LoadResult
 import eu.kanade.tachiyomi.source.CatalogueSource
@@ -35,8 +36,8 @@ internal object ExtensionLoader {
 
     private val preferences: PreferencesHelper by injectLazy()
     private val trustExtension: TrustExtension by injectLazy()
-    private val loadNsfwSource by lazy {
-        preferences.showNsfwSources().get()
+    private val allowedContentRating by lazy {
+        preferences.extensionContentRating().get()
     }
 
     private const val EXTENSION_FEATURE = "tachiyomi.extension"
@@ -45,8 +46,26 @@ internal object ExtensionLoader {
     private const val METADATA_NSFW = "tachiyomi.extension.nsfw"
     private const val METADATA_HAS_README = "tachiyomi.extension.hasReadme"
     private const val METADATA_HAS_CHANGELOG = "tachiyomi.extension.hasChangelog"
-    const val LIB_VERSION_MIN = 1.3
-    const val LIB_VERSION_MAX = 1.5
+
+    // Introduced by extensions-lib (tachiyomix) 1.6
+    private const val METADATA_NAME = "tachiyomix.name"
+    private const val METADATA_EXTENSION_LIB = "tachiyomix.extensionLib"
+    private const val METADATA_CONTENT_WARNING = "tachiyomix.contentWarning"
+
+    val SUPPORTED_LIB_VERSIONS = listOf(1.3, 1.4, 1.5, 1.6)
+
+    /**
+     * Reads the `major.minor` lib version out of whatever a repo or a manifest published, be that
+     * "1.6", "1.6.0" or an extension versionName like "1.6.23". Membership of
+     * [SUPPORTED_LIB_VERSIONS] is an exact match, so anything sloppier would drop the extension.
+     */
+    fun parseLibVersion(raw: String): Double? {
+        val parts = raw.trim().trimStart('v', 'V').split('.')
+        return when {
+            parts.size >= 2 -> "${parts[0]}.${parts[1]}".toDoubleOrNull()
+            else -> parts.firstOrNull()?.toDoubleOrNull()
+        }
+    }
 
     @Suppress("DEPRECATION")
     private val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or
@@ -280,7 +299,16 @@ internal object ExtensionLoader {
         val appInfo = pkgInfo.applicationInfo!!
         val pkgName = pkgInfo.packageName
 
-        val extName = pkgManager.getApplicationLabel(appInfo).toString().substringAfter("Tachiyomi: ")
+        // A package can carry the extension feature without any <meta-data> at all, in which case
+        // this is null. Everything below reads it, so bail out before the first dereference.
+        val metaData = appInfo.metaData
+        if (metaData == null) {
+            Logger.w { "Package $pkgName has no metadata" }
+            return LoadResult.Error
+        }
+
+        val extName = metaData.getString(METADATA_NAME)
+            ?: pkgManager.getApplicationLabel(appInfo).toString().substringAfter("Tachiyomi: ")
         val versionName = pkgInfo.versionName
         val versionCode = PackageInfoCompat.getLongVersionCode(pkgInfo)
 
@@ -290,10 +318,15 @@ internal object ExtensionLoader {
         }
 
         // Validate lib version
-        val libVersion = versionName.substringBeforeLast('.').toDoubleOrNull()
-        if (libVersion == null || libVersion < LIB_VERSION_MIN || libVersion > LIB_VERSION_MAX) {
+        val libVersion = metaData.getFloat(METADATA_EXTENSION_LIB)
+            .takeUnless { it == 0.0f }
+            ?.toString()
+            ?.let(::parseLibVersion)
+            ?: parseLibVersion(versionName)
+        if (libVersion == null || libVersion !in SUPPORTED_LIB_VERSIONS) {
             Logger.w {
-                "Lib version is $libVersion, while only versions $LIB_VERSION_MIN to $LIB_VERSION_MAX are allowed"
+                "Unsupported extension lib version $libVersion; supported versions: " +
+                    SUPPORTED_LIB_VERSIONS.joinToString()
             }
             return LoadResult.Error
         }
@@ -315,14 +348,20 @@ internal object ExtensionLoader {
             return LoadResult.Untrusted(extension)
         }
 
-        val isNsfw = appInfo.metaData.getInt(METADATA_NSFW) == 1
-        if (!loadNsfwSource && isNsfw) {
-            Logger.w { "NSFW extension $pkgName not allowed" }
+        val contentRating = if (metaData.containsKey(METADATA_CONTENT_WARNING)) {
+            // getInt hands back its default when the value isn't an int, so use one that is out of
+            // range rather than 0, which would quietly mean "safe"
+            ContentRating.fromManifestContentWarning(metaData.getInt(METADATA_CONTENT_WARNING, -1))
+        } else {
+            ContentRating.fromNsfwFlag(metaData.getInt(METADATA_NSFW) == 1)
+        }
+        if (contentRating > allowedContentRating) {
+            Logger.w { "$contentRating extension $pkgName not allowed, limit is $allowedContentRating" }
             return LoadResult.Error
         }
 
-        val hasReadme = appInfo.metaData.getInt(METADATA_HAS_README, 0) == 1
-        val hasChangelog = appInfo.metaData.getInt(METADATA_HAS_CHANGELOG, 0) == 1
+        val hasReadme = metaData.getInt(METADATA_HAS_README, 0) == 1
+        val hasChangelog = metaData.getInt(METADATA_HAS_CHANGELOG, 0) == 1
 
         val classLoader = try {
             ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
@@ -331,7 +370,7 @@ internal object ExtensionLoader {
             return LoadResult.Error
         }
 
-        val sources = appInfo.metaData.getString(METADATA_SOURCE_CLASS)!!
+        val sources = metaData.getString(METADATA_SOURCE_CLASS)!!
             .split(";")
             .map {
                 val sourceClass = it.trim()
@@ -370,11 +409,12 @@ internal object ExtensionLoader {
             versionCode = versionCode,
             libVersion = libVersion,
             lang = lang,
-            isNsfw = isNsfw,
+            contentRating = contentRating,
             sources = sources,
-            pkgFactory = appInfo.metaData.getString(METADATA_SOURCE_FACTORY),
+            pkgFactory = metaData.getString(METADATA_SOURCE_FACTORY),
             icon = appInfo.loadIcon(pkgManager),
             isShared = extensionInfo.isShared,
+            signatureHash = signatures.last(),
         )
         return LoadResult.Success(extension)
     }

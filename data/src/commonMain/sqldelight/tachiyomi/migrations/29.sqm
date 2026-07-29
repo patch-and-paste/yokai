@@ -1,0 +1,3 @@
+-- Source-provided metadata, introduced by extensions-lib 1.6
+ALTER TABLE mangas ADD COLUMN memo TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE chapters ADD COLUMN memo TEXT NOT NULL DEFAULT '{}';

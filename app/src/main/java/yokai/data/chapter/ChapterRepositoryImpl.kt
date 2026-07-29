@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.data.database.models.MangaChapter
 import eu.kanade.tachiyomi.util.system.toInt
 import kotlinx.coroutines.flow.Flow
 import yokai.data.DatabaseHandler
+import yokai.data.jsonObjectAdapter
 import yokai.domain.chapter.ChapterRepository
 import yokai.domain.chapter.models.ChapterUpdate
 
@@ -117,7 +118,8 @@ class ChapterRepositoryImpl(private val handler: DatabaseHandler) : ChapterRepos
                     chapterNumber = update.chapterNumber,
                     sourceOrder = update.sourceOrder,
                     dateFetch = update.dateFetch,
-                    dateUpload = update.dateUpload
+                    dateUpload = update.dateUpload,
+                    memo = update.memo?.let(jsonObjectAdapter::encode),
                 )
             }
         }
@@ -140,6 +142,7 @@ class ChapterRepositoryImpl(private val handler: DatabaseHandler) : ChapterRepos
                 sourceOrder = chapter.source_order.toLong(),
                 dateFetch = chapter.date_fetch,
                 dateUpload = chapter.date_upload,
+                memo = chapter.memo.let(jsonObjectAdapter::encode),
             )
             chaptersQueries.selectLastInsertedRowId()
         }
@@ -161,6 +164,7 @@ class ChapterRepositoryImpl(private val handler: DatabaseHandler) : ChapterRepos
                     sourceOrder = chapter.source_order.toLong(),
                     dateFetch = chapter.date_fetch,
                     dateUpload = chapter.date_upload,
+                    memo = chapter.memo.let(jsonObjectAdapter::encode),
                 )
                 val lastInsertId = chaptersQueries.selectLastInsertedRowId().executeAsOne()
                 chapter.copy().apply { id = lastInsertId }

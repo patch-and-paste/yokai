@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.data.backup.models
 import eu.kanade.tachiyomi.data.database.models.ChapterImpl
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
+import yokai.data.jsonObjectAdapter
 
 @Serializable
 data class BackupChapter(
@@ -20,6 +21,9 @@ data class BackupChapter(
     // chapterNumber is called number is 1.x
     @ProtoNumber(9) var chapterNumber: Float = 0F,
     @ProtoNumber(10) var sourceOrder: Int = 0,
+    // Source-provided metadata (extensions-lib 1.6). Stored as the raw JSON text, which is wire
+    // compatible with the `bytes` field upstream uses for the same number.
+    @ProtoNumber(13) var memo: String = "{}",
 
     // J2K specific values
     @ProtoNumber(800) var pagesLeft: Int = 0,
@@ -37,6 +41,7 @@ data class BackupChapter(
             date_upload = this@BackupChapter.dateUpload
             source_order = this@BackupChapter.sourceOrder
             pages_left = this@BackupChapter.pagesLeft
+            memo = jsonObjectAdapter.decode(this@BackupChapter.memo)
         }
     }
 
@@ -55,6 +60,7 @@ data class BackupChapter(
             sourceOrder: Long,
             dateFetch: Long,
             dateUpload: Long,
+            memo: String,
         ) = BackupChapter(
             url = url,
             name = name,
@@ -67,6 +73,7 @@ data class BackupChapter(
             sourceOrder = sourceOrder.toInt(),
             dateFetch = dateFetch,
             dateUpload = dateUpload,
+            memo = memo,
         )
     }
 }

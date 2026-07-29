@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.domain.manga.models.Manga
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.SourceManager
+import eu.kanade.tachiyomi.source.awaitMangaUpdate
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
@@ -312,7 +313,7 @@ open class BrowseSourcePresenter(
      */
     private suspend fun getMangaDetails(manga: Manga): Manga {
         try {
-            val networkManga = source.getMangaDetails(manga.copy())
+            val networkManga = source.awaitMangaUpdate(manga.copy(), fetchDetails = true).manga
             manga.copyFrom(networkManga)
             manga.initialized = true
             updateManga.await(manga.toMangaUpdate())

@@ -1145,7 +1145,7 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
             }
             is BrowseSourceController -> {
                 val source = controller.presenter.source as? HttpSource ?: return
-                outContent.webUri = Uri.parse(source.baseUrl)
+                outContent.webUri = Uri.parse(source.getHomeUrl())
             }
         }
     }

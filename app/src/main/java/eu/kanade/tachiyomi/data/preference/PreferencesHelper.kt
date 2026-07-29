@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.core.preference.getEnum
 import eu.kanade.tachiyomi.core.storage.preference.asDateFormat
 import eu.kanade.tachiyomi.data.updater.AppDownloadInstallJob
 import eu.kanade.tachiyomi.domain.manga.models.Manga
+import eu.kanade.tachiyomi.extension.model.ContentRating
 import eu.kanade.tachiyomi.extension.model.InstalledExtensionsOrder
 import eu.kanade.tachiyomi.ui.library.LibraryItem
 import eu.kanade.tachiyomi.ui.library.filter.FilterBottomSheet
@@ -384,7 +385,20 @@ class PreferencesHelper(val context: Context, val preferenceStore: PreferenceSto
     fun sideNavIconAlignment() = preferenceStore.getInt(Keys.sideNavIconAlignment, 1)
 
     // TODO: SourcePref
+    @Deprecated("Superseded by the tri-state rating", ReplaceWith("extensionContentRating()"))
     fun showNsfwSources() = preferenceStore.getBoolean(Keys.showNsfwSource, true)
+
+    /**
+     * Highest [ContentRating] an extension may declare and still show up.
+     *
+     * Defaults to whatever the pre-1.6 binary NSFW switch was set to, so existing installs keep
+     * their choice without needing a migration.
+     */
+    @Suppress("DEPRECATION")
+    fun extensionContentRating() = preferenceStore.getEnum(
+        Keys.extensionContentRating,
+        if (showNsfwSources().get()) ContentRating.NSFW else ContentRating.SAFE,
+    )
 
     fun themeMangaDetails() = preferenceStore.getBoolean(Keys.themeMangaDetails, true)
 

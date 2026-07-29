@@ -25,12 +25,17 @@ class ExtensionSettingsDividerItemDecoration(context: Context) : androidx.recycl
 
     @SuppressLint("RestrictedApi")
     override fun onDraw(c: Canvas, parent: androidx.recyclerview.widget.RecyclerView, state: androidx.recyclerview.widget.RecyclerView.State) {
+        val concatAdapter = parent.adapter as? ConcatAdapter ?: return
+        val preferences = concatAdapter.adapters.lastOrNull() as? PreferenceGroupAdapter ?: return
+        // The header and the repo list sit in front of the preferences and don't count towards them
+        val offset = concatAdapter.adapters.takeWhile { it !== preferences }.sumOf { it.itemCount }
+
         val childCount = parent.childCount
         for (i in 0 until childCount - 1) {
             val child = parent.getChildAt(i)
-            val index = parent.getChildAdapterPosition(child)
-            val adapter = (parent.adapter as? ConcatAdapter)?.adapters?.lastOrNull() as? PreferenceGroupAdapter
-            if (index > 0 && adapter?.getItem(index) is SwitchPreferenceCompat) {
+            val next = parent.getChildAdapterPosition(child) - offset + 1
+            // A line above every source but the first, keeping each one grouped with its preferences
+            if (next in 1 until preferences.itemCount && preferences.getItem(next) is SwitchPreferenceCompat) {
                 val params = child.layoutParams as androidx.recyclerview.widget.RecyclerView.LayoutParams
                 val top = child.bottom + params.bottomMargin
                 val bottom = top + divider.intrinsicHeight

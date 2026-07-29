@@ -8,6 +8,7 @@ import yokai.core.migration.Migration
 import yokai.core.migration.MigrationContext
 import yokai.domain.extension.repo.ExtensionRepoRepository
 import yokai.domain.extension.repo.exception.SaveExtensionRepoException
+import yokai.domain.extension.repo.model.ExtensionRepo
 
 class RepoJsonMigration : Migration {
     override val version: Float = 130f
@@ -20,11 +21,13 @@ class RepoJsonMigration : Migration {
         for ((index, source) in extensionRepos.get().withIndex()) {
             try {
                 extensionRepoRepository.upsertRepository(
-                    source,
-                    "Repo #${index + 1}",
-                    null,
-                    source,
-                    "NOFINGERPRINT-${index + 1}",
+                    ExtensionRepo(
+                        baseUrl = source,
+                        name = "Repo #${index + 1}",
+                        shortName = null,
+                        website = source,
+                        signingKeyFingerprint = "NOFINGERPRINT-${index + 1}",
+                    ),
                 )
             } catch (e: SaveExtensionRepoException) {
                 Logger.e(e) { "Error Migrating Extension Repo with baseUrl: $source" }

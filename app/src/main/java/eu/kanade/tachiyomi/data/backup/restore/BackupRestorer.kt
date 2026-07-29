@@ -4,8 +4,10 @@ import android.content.Context
 import android.net.Uri
 import eu.kanade.tachiyomi.data.backup.BackupNotifier
 import eu.kanade.tachiyomi.data.backup.restore.restorers.CategoriesBackupRestorer
+import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionReposBackupRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaBackupRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceBackupRestorer
+import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.util.BackupUtil
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import kotlinx.coroutines.coroutineScope
@@ -22,6 +24,7 @@ class BackupRestorer(
     private val categoriesBackupRestorer: CategoriesBackupRestorer = CategoriesBackupRestorer(),
     private val mangaBackupRestorer: MangaBackupRestorer = MangaBackupRestorer(),
     private val preferenceBackupRestorer: PreferenceBackupRestorer = PreferenceBackupRestorer(context),
+    private val extensionReposBackupRestorer: ExtensionReposBackupRestorer = ExtensionReposBackupRestorer(),
 ) {
     private var restoreAmount = 0
     private var restoreProgress = 0
@@ -51,7 +54,7 @@ class BackupRestorer(
     private suspend fun performRestore(uri: Uri) {
         val backup = BackupUtil.decodeBackup(context, uri)
 
-        restoreAmount = backup.backupManga.size + 3 // +3 for categories, app prefs, source prefs
+        restoreAmount = backup.backupManga.size + 4 // +4 for categories, app prefs, source prefs, repos
 
         sourceMapping = backup.backupSources.associate { it.sourceId to it.name }
 
@@ -76,21 +79,34 @@ class BackupRestorer(
                 showRestoreProgress(restoreProgress, restoreAmount, context.getString(MR.strings.source_settings))
             }
 
+            // Complete the repo progress step even when the backup contains no repos.
+            ensureActive()
+            extensionReposBackupRestorer.restoreExtensionRepos(backup.backupExtensionRepos) {
+                restoreProgress += 1
+                showRestoreProgress(restoreProgress, restoreAmount, context.getString(MR.strings.source_repos))
+            }
+
             // Restore individual manga
-            backup.backupManga.forEach {
-                ensureActive()
-                mangaBackupRestorer.restoreManga(
-                    it,
-                    backup.backupCategories,
-                    onComplete = { manga ->
-                        restoreProgress += 1
-                        showRestoreProgress(restoreProgress, restoreAmount, manga.title)
-                    },
-                    onError = { manga, e ->
-                        val sourceName = sourceMapping[manga.source] ?: manga.source.toString()
-                        errors.add(Date() to "${manga.title} [$sourceName]: ${e.message}")
-                    },
-                )
+            try {
+                backup.backupManga.forEach {
+                    ensureActive()
+                    mangaBackupRestorer.restoreManga(
+                        it,
+                        backup.backupCategories,
+                        onComplete = { manga ->
+                            restoreProgress += 1
+                            showRestoreProgress(restoreProgress, restoreAmount, manga.title)
+                        },
+                        onError = { manga, e ->
+                            val sourceName = sourceMapping[manga.source] ?: manga.source.toString()
+                            errors.add(Date() to "${manga.title} [$sourceName]: ${e.message}")
+                        },
+                    )
+                }
+            } finally {
+                // Reload screens once after all committed changes, including when restoration is
+                // cancelled.
+                LibraryUpdateJob.updateMutableFlow.tryEmit(LibraryUpdateJob.BULK_CHANGE)
             }
         }
         // TODO: optionally trigger online library + tracker update

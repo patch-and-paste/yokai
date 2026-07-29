@@ -51,7 +51,9 @@ class ExtensionDetailsHeaderAdapter(private val presenter: ExtensionDetailsPrese
             binding.extensionTitle.text = extension.name
             binding.extensionVersion.text = context.getString(MR.strings.version_, extension.versionName)
             binding.extensionLang.text = context.getString(MR.strings.language_, LocaleHelper.getSourceDisplayName(extension.lang, context))
-            binding.extensionNsfw.isVisible = extension.isNsfw
+            val contentWarning = extension.contentRating.warningResId
+            binding.extensionNsfw.isVisible = contentWarning != null
+            contentWarning?.let { binding.extensionNsfw.text = context.getString(it) }
             binding.extensionPkg.text = extension.pkgName
 
             binding.extensionUninstallButton.setOnClickListener {
@@ -80,9 +82,16 @@ class ExtensionDetailsHeaderAdapter(private val presenter: ExtensionDetailsPrese
                 binding.extensionUninstallButton.text = context.getString(MR.strings.remove)
             }
 
-            if (extension.isObsolete) {
-                binding.extensionWarningBanner.isVisible = true
-                binding.extensionWarningBanner.setText(MR.strings.obsolete_extension_message)
+            when {
+                extension.isObsolete -> {
+                    binding.extensionWarningBanner.isVisible = true
+                    binding.extensionWarningBanner.setText(MR.strings.obsolete_extension_message)
+                }
+                extension.isMoved -> {
+                    binding.extensionWarningBanner.isVisible = true
+                    binding.extensionWarningBanner.setText(MR.strings.moved_extension_message)
+                }
+                else -> binding.extensionWarningBanner.isVisible = false
             }
         }
     }

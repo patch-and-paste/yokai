@@ -24,29 +24,37 @@ class ExtensionRepoRepositoryImpl(private val handler: DatabaseHandler): Extensi
     override fun getCount(): Flow<Int> =
         handler.subscribeToOne { extension_reposQueries.count() }.map { it.toInt() }
 
-    override suspend fun insertRepository(
-        baseUrl: String,
-        name: String,
-        shortName: String?,
-        website: String,
-        signingKeyFingerprint: String
-    ) {
+    override suspend fun insertRepository(repo: ExtensionRepo) {
         try {
-            handler.await { extension_reposQueries.insert(baseUrl, name, shortName, website, signingKeyFingerprint) }
+            handler.await {
+                extension_reposQueries.insert(
+                    base_url = repo.baseUrl,
+                    name = repo.name,
+                    short_name = repo.shortName,
+                    website = repo.website,
+                    fingerprint = repo.signingKeyFingerprint,
+                    isLegacy = repo.isLegacy,
+                    extensionListUrl = repo.extensionListUrl,
+                )
+            }
         } catch (exc: SQLiteException) {
             throw SaveExtensionRepoException(exc)
         }
     }
 
-    override suspend fun upsertRepository(
-        baseUrl: String,
-        name: String,
-        shortName: String?,
-        website: String,
-        signingKeyFingerprint: String
-    ) {
+    override suspend fun upsertRepository(repo: ExtensionRepo) {
         try {
-            handler.await { extension_reposQueries.upsert(baseUrl, name, shortName, website, signingKeyFingerprint) }
+            handler.await {
+                extension_reposQueries.upsert(
+                    base_url = repo.baseUrl,
+                    name = repo.name,
+                    short_name = repo.shortName,
+                    website = repo.website,
+                    fingerprint = repo.signingKeyFingerprint,
+                    isLegacy = repo.isLegacy,
+                    extensionListUrl = repo.extensionListUrl,
+                )
+            }
         } catch (exc: SQLiteException) {
             throw SaveExtensionRepoException(exc)
         }
@@ -55,12 +63,33 @@ class ExtensionRepoRepositoryImpl(private val handler: DatabaseHandler): Extensi
     override suspend fun replaceRepository(newRepo: ExtensionRepo) {
         handler.await {
             extension_reposQueries.replace(
-                newRepo.baseUrl,
-                newRepo.name,
-                newRepo.shortName,
-                newRepo.website,
-                newRepo.signingKeyFingerprint,
+                base_url = newRepo.baseUrl,
+                name = newRepo.name,
+                short_name = newRepo.shortName,
+                website = newRepo.website,
+                fingerprint = newRepo.signingKeyFingerprint,
+                isLegacy = newRepo.isLegacy,
+                extensionListUrl = newRepo.extensionListUrl,
             )
+        }
+    }
+
+    override suspend fun migrateRepository(oldBaseUrl: String, newRepo: ExtensionRepo) {
+        try {
+            handler.await(inTransaction = true) {
+                extension_reposQueries.delete(oldBaseUrl)
+                extension_reposQueries.upsert(
+                    base_url = newRepo.baseUrl,
+                    name = newRepo.name,
+                    short_name = newRepo.shortName,
+                    website = newRepo.website,
+                    fingerprint = newRepo.signingKeyFingerprint,
+                    isLegacy = newRepo.isLegacy,
+                    extensionListUrl = newRepo.extensionListUrl,
+                )
+            }
+        } catch (exc: SQLiteException) {
+            throw SaveExtensionRepoException(exc)
         }
     }
 
@@ -74,5 +103,15 @@ class ExtensionRepoRepositoryImpl(private val handler: DatabaseHandler): Extensi
         shortName: String?,
         website: String,
         signingKeyFingerprint: String,
-    ): ExtensionRepo = ExtensionRepo(baseUrl, name, shortName, website, signingKeyFingerprint)
+        isLegacy: Boolean,
+        extensionListUrl: String?,
+    ): ExtensionRepo = ExtensionRepo(
+        baseUrl = baseUrl,
+        name = name,
+        shortName = shortName,
+        website = website,
+        signingKeyFingerprint = signingKeyFingerprint,
+        isLegacy = isLegacy,
+        extensionListUrl = extensionListUrl,
+    )
 }

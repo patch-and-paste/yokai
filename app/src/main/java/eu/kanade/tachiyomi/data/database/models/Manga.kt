@@ -20,6 +20,7 @@ import java.util.Locale
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import yokai.data.jsonObjectAdapter
 import yokai.data.updateStrategyAdapter
 import yokai.domain.chapter.interactor.GetChapter
 import yokai.domain.manga.interactor.UpdateManga
@@ -211,6 +212,7 @@ fun Manga.Companion.mapper(
     filteredScanlators: String?,
     updateStrategy: Long,
     coverLastModified: Long,
+    memo: String,
 ) = create(url, title, source).apply {
     this.id = id
     this.artist = artist
@@ -229,6 +231,7 @@ fun Manga.Companion.mapper(
     this.filtered_scanlators = filteredScanlators
     this.update_strategy = updateStrategy.let(updateStrategyAdapter::decode)
     this.cover_last_modified = coverLastModified
+    this.memo = memo.let(jsonObjectAdapter::decode)
 }
 
 fun Manga.hasCustomCover(coverCache: CoverCache = Injekt.get()): Boolean {

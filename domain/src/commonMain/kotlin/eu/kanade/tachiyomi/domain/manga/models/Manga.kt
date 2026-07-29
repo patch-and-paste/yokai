@@ -77,6 +77,12 @@ interface Manga : SManga {
 
         update_strategy = other.update_strategy
 
+        // Sources on the pre-1.6 bridge always return an empty memo, which must not wipe a
+        // value a 1.6 extension stored earlier
+        if (other.memo.isNotEmpty()) {
+            memo = other.memo
+        }
+
         if (!initialized) {
             initialized = other.initialized
         }
@@ -215,6 +221,7 @@ interface Manga : SManga {
             dateAdded = date_added,
             filteredScanlators = filtered_scanlators,
             updateStrategy = update_strategy,
+            memo = memo,
         )
     }
 

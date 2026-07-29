@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.data.preference.changesIn
 import eu.kanade.tachiyomi.data.updater.AppDownloadInstallJob
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.ExtensionUpdateJob
+import eu.kanade.tachiyomi.extension.model.ContentRating
 import eu.kanade.tachiyomi.source.SourceManager
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.migration.MigrationController
@@ -26,6 +27,7 @@ import eu.kanade.tachiyomi.ui.setting.bindTo
 import eu.kanade.tachiyomi.ui.setting.defaultValue
 import eu.kanade.tachiyomi.ui.setting.infoPreference
 import eu.kanade.tachiyomi.ui.setting.intListPreference
+import eu.kanade.tachiyomi.ui.setting.listPreference
 import eu.kanade.tachiyomi.ui.setting.onChange
 import eu.kanade.tachiyomi.ui.setting.onClick
 import eu.kanade.tachiyomi.ui.setting.preference
@@ -212,14 +214,18 @@ class SettingsBrowseController : SettingsLegacyController() {
         }
 
         preferenceCategory {
-            titleRes = MR.strings.nsfw_sources
+            titleRes = MR.strings.content_rating
 
-            switchPreference {
-                key = PreferenceKeys.showNsfwSource
-                titleRes = MR.strings.show_in_sources_and_extensions
-                summaryRes = MR.strings.requires_app_restart
-                defaultValue = true
+            listPreference(activity) {
+                bindTo(preferences.extensionContentRating())
+                titleRes = MR.strings.highest_content_rating_to_show
+
+                val values = ContentRating.entries
+                entriesRes = values.map { it.allowedTitleResId }.toTypedArray()
+                entryValues = values.map { it.name }
             }
+            infoPreference(MR.strings.requires_app_restart)
+            infoPreference(MR.strings.content_rating_only_applies_to_declared)
             infoPreference(MR.strings.does_not_prevent_unofficial_nsfw)
         }
     }

@@ -42,6 +42,9 @@ class ExtensionHolder(view: View, val adapter: ExtensionAdapter) :
         binding.cancelButton.setOnClickListener {
             adapter.buttonClickListener.onCancelClick(flexibleAdapterPosition)
         }
+        binding.webviewButton.setOnClickListener {
+            adapter.buttonClickListener.onWebViewClick(flexibleAdapterPosition)
+        }
     }
 
     fun bind(item: ExtensionItem) {
@@ -98,10 +101,11 @@ class ExtensionHolder(view: View, val adapter: ExtensionAdapter) :
 
         binding.version.text = infoText.joinToString(" • ")
         binding.lang.text = LocaleHelper.getLocalizedDisplayName(extension.lang)
-        binding.warning.text = when {
-            extension.isNsfw -> itemView.context.getString(MR.strings.nsfw_short)
-            else -> ""
-        }.plusRepo(extension).uppercase(Locale.ROOT)
+        binding.warning.text = extension.contentRating.badgeResId
+            ?.let { itemView.context.getString(it) }
+            .orEmpty()
+            .plusRepo(extension)
+            .uppercase(Locale.ROOT)
         binding.installProgress.progress = item.sessionProgress ?: 0
         binding.installProgress.isVisible = item.sessionProgress != null
         binding.cancelButton.isVisible = item.sessionProgress != null
@@ -130,6 +134,7 @@ class ExtensionHolder(view: View, val adapter: ExtensionAdapter) :
         val repoText = when {
             extension is Extension.Untrusted -> itemView.context.getString(MR.strings.untrusted)
             extension is Extension.Installed && extension.isObsolete -> itemView.context.getString(MR.strings.obsolete)
+            extension is Extension.Installed && extension.isMoved -> itemView.context.getString(MR.strings.moved)
             else -> ""
         }
 
@@ -144,6 +149,11 @@ class ExtensionHolder(view: View, val adapter: ExtensionAdapter) :
 
     @Suppress("ResourceType")
     fun bindButton(item: ExtensionItem) = with(binding.extButton) {
+        // Hide the WebView action while installation controls use this space.
+        binding.webviewButton.isVisible =
+            item.installStep.let { it == null || it == InstallStep.Error } &&
+            item.extension.browsableSources.isNotEmpty()
+
         if (item.installStep == InstallStep.Done) return@with
         isEnabled = true
         isClickable = true

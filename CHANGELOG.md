@@ -11,6 +11,25 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 ## [Unreleased]
 
 ### Additions
+- Add support for extension lib 1.6 (tachiyomix), while keeping lib 1.3 to 1.5 extensions working
+  - Extensions can now return details and chapters from a single `getMangaUpdate` call
+  - Read `tachiyomix.name`, `tachiyomix.extensionLib` and `tachiyomix.contentWarning` manifest metadata
+  - "Open in WebView" from browse now respects the source's `getHomeUrl()`
+  - Source-provided entry and chapter metadata (`memo`) is stored and included in backups
+- Add support for the tachiyomix extension store index (protobuf or JSON, gzipped or not)
+  - Legacy `index.min.json` repos keep working, and follow their repo's `index_v2` pointer to the
+    new index automatically when one shows up
+  - Any HTTPS URL can be added as a repo now, not only one ending in `index.min.json`
+- Extension repos are now included in backups, so restoring on a new device keeps them
+- Extensions now have a button to open their source's site, so you can look at one before installing it
+  - Extensions covering more than one site ask which one to open
+- Extension info now lists every repo offering the extension, with the version each one has
+  - Says which repo an extension was installed from, and flags it when that repo stops offering it
+  - You can update, switch or downgrade to any other repo carrying it from there
+  - Repos that sign with a different key remove and reinstall the extension; source settings are kept
+- Extensions are now filtered by content rating (safe / mixed / NSFW) instead of a plain NSFW switch
+  - Extensions built before lib 1.6 only declare whether they are NSFW, so they stay safe or NSFW
+  - Existing installs keep whatever the old "Show NSFW sources" switch was set to
 - Add random library sort
 - Add the ability to save search queries
 - Add toggle to enable/disable hide source on swipe (@Hiirbaf)
@@ -33,6 +52,20 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Long tap chapters on Reader now mark it as read (@lalalasupa0)
 
 ### Fixes
+- An extension offered by two repos is no longer listed twice, and updates now come from the repo
+  that can actually install them rather than whichever one was read first
+- An extension that reappeared in a repo stayed marked obsolete until the app was restarted
+- The extension info screen closed itself whenever extensions were checked in the background
+- Restoring a backup is dramatically faster, and no longer gets quadratically slower as the library grows
+  - History was resolved one entry at a time by chapter URL, against an unindexed column, so a restore
+    scanned the whole chapters table twice per read chapter
+  - History entries are now matched against the chapters just restored, and are scoped to the entry
+    they belong to, so a shared chapter URL can no longer pull in another entry's history
+  - Each entry now restores in a single transaction instead of five to seven, so a failure part-way
+    through no longer leaves it half restored
+  - The library, recents and details screens now reload once when the restore finishes, instead of
+    rebuilding for every entry while it is still running
+- Fix "getMangaUpdate must not be called concurrently for same manga" when browsing and opening an entry at the same time
 - Allow users to bypass onboarding's permission step if Shizuku is installed
 - Fix Recents page shows "No recent chapters" instead of a loading screen
 - Fix not fully loaded entries can't be selected on Library page
@@ -54,6 +87,11 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Update translations from Weblate
 
 ### Other
+- Replace `scanlators_view` with a real `excluded_scanlators` table
+  - The view split `mangas.filtered_scanlators` with a recursive CTE over every row of `mangas`, and
+    was joined by every chapter, history and library query, so it was rebuilt from scratch each time
+  - `mangas.filtered_scanlators` is still the serialised form used by the app and by backups
+- Add an index on `chapters(url)`
 - Refactor Library to utilize Flow even more
 - Refactor EmptyView to use Compose
 - Refactor Reader ChapterTransition to use Compose (@arkon)
@@ -74,7 +112,7 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Update serialization to v1.8.1
 - Update dependency io.github.fornewid:material-motion-compose-core to v2.0.1
 - Update lifecycle to v2.9.0
-- Update dependency org.jsoup:jsoup to v1.21.2
+- Update dependency org.jsoup:jsoup to v1.22.2
 - Update dependency org.jetbrains.kotlinx:kotlinx-collections-immutable to v0.4.0
 - Update dependency io.mockk:mockk to v1.14.2
 - Update dependency io.coil-kt.coil3:coil-bom to v3.4.0
@@ -94,7 +132,7 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Update aboutlibraries to v13.1.0
 - Update plugin kotlinter to v5.1.0
 - Update plugin gradle-versions to v0.52.0
-- Update okhttp monorepo to v5.0.0-alpha.16
+- Update okhttp monorepo to v5.4.0, and add okhttp-zstd, as required by extension lib 1.6
 - Update moko to v0.25.1
 - Update dependency org.jetbrains.kotlinx:kotlinx-coroutines-bom to v1.10.2
 - Update dependency me.zhanghai.android.libarchive:library to v1.1.5

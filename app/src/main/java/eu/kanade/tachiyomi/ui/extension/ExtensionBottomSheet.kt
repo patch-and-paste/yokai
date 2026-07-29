@@ -14,12 +14,14 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.tabs.TabLayout
 import eu.davidea.flexibleadapter.FlexibleAdapter
 import eu.davidea.flexibleadapter.items.IFlexible
+import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.databinding.ExtensionsBottomSheetBinding
 import eu.kanade.tachiyomi.databinding.RecyclerWithScrollerBinding
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.model.InstallStep
 import eu.kanade.tachiyomi.extension.model.InstalledExtensionsOrder
+import eu.kanade.tachiyomi.ui.base.MaterialMenuSheet
 import eu.kanade.tachiyomi.ui.extension.details.ExtensionDetailsController
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.migration.BaseMigrationInterface
@@ -29,6 +31,8 @@ import eu.kanade.tachiyomi.ui.migration.SourceAdapter
 import eu.kanade.tachiyomi.ui.migration.SourceItem
 import eu.kanade.tachiyomi.ui.migration.manga.design.PreMigrationController
 import eu.kanade.tachiyomi.ui.source.BrowseController
+import eu.kanade.tachiyomi.ui.webview.WebViewActivity
+import eu.kanade.tachiyomi.util.system.LocaleHelper
 import eu.kanade.tachiyomi.util.system.isPackageInstalled
 import eu.kanade.tachiyomi.util.system.materialAlertDialog
 import eu.kanade.tachiyomi.util.system.rootWindowInsetsCompat
@@ -228,6 +232,44 @@ class ExtensionBottomSheet @JvmOverloads constructor(context: Context, attrs: At
     override fun onCancelClick(position: Int) {
         val extension = (extAdapter?.getItem(position) as? ExtensionItem) ?: return
         presenter.cancelExtensionInstall(extension)
+    }
+
+    override fun onWebViewClick(position: Int) {
+        val extension = (extAdapter?.getItem(position) as? ExtensionItem)?.extension ?: return
+        val sources = extension.browsableSources
+        if (sources.size <= 1) {
+            sources.firstOrNull()?.let(::openSourceInWebView)
+            return
+        }
+
+        val activity = controller.activity ?: return
+        // A factory extension can carry a site per language, so name alone isn't always enough
+        val showLang = sources.distinctBy { it.lang }.size > 1
+        MaterialMenuSheet(
+            activity,
+            sources.mapIndexed { index, source ->
+                MaterialMenuSheet.MenuSheetItem(
+                    id = index,
+                    drawable = R.drawable.ic_language_24dp,
+                    text = if (showLang) {
+                        "${source.name} (${LocaleHelper.getLocalizedDisplayName(source.lang)})"
+                    } else {
+                        source.name
+                    },
+                )
+            },
+            title = extension.name,
+        ) { _, index ->
+            openSourceInWebView(sources[index])
+            true
+        }.show()
+    }
+
+    private fun openSourceInWebView(source: Extension.BrowsableSource) {
+        val activity = controller.activity ?: return
+        activity.startActivity(
+            WebViewActivity.newIntent(activity, source.url, source.id, source.name),
+        )
     }
 
     override fun onUpdateAllClicked(position: Int) {

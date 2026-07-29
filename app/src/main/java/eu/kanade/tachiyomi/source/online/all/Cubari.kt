@@ -39,21 +39,23 @@ class Cubari(delegate: HttpSource) :
         val chapterNumber = uri.pathSegments.getOrNull(3)?.replace("-", ".")?.toFloatOrNull() ?: return null
         val mangaUrl = "/read/$cubariType/$cubariPath"
         return withContext(Dispatchers.IO) {
-            val deferredManga = async {
-                getManga.awaitByUrlAndSource(mangaUrl, delegate.id) ?: getMangaDetailsByUrl(mangaUrl)
+            val cachedManga = getManga.awaitByUrlAndSource(mangaUrl, delegate.id)
+            val cachedChapters = cachedManga
+                ?.let { getChapter.awaitAll(it, false) }
+                ?.takeIf { findChapter(it, cubariType, chapterNumber) != null }
+
+            // One request for whatever the database couldn't answer
+            val update = if (cachedManga == null || cachedChapters == null) {
+                getMangaUpdateByUrl(
+                    mangaUrl,
+                    fetchDetails = cachedManga == null,
+                    fetchChapters = cachedChapters == null,
+                )
+            } else {
+                null
             }
-            val deferredChapters = async {
-                getManga.awaitByUrlAndSource(mangaUrl, delegate.id)?.let { manga ->
-                    val chapters = getChapter.awaitAll(manga, false)
-                    val chapter = findChapter(chapters, cubariType, chapterNumber)
-                    if (chapter != null) {
-                        return@async chapters
-                    }
-                }
-                getChapterListByUrl(mangaUrl)
-            }
-            val manga = deferredManga.await()
-            val chapters = deferredChapters.await()
+            val manga = cachedManga ?: update!!.manga
+            val chapters = cachedChapters ?: update!!.chapters
             val context = Injekt.get<PreferencesHelper>().context
             val trueChapter = findChapter(chapters, cubariType, chapterNumber)?.toChapter()
                 ?: error(

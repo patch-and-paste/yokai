@@ -1,0 +1,25 @@
+-- Scanlators excluded from a manga's chapter list. Replaces the old `scanlators_view`, which
+-- split `mangas.filtered_scanlators` with a recursive CTE over the whole table and so had to be
+-- re-materialised on every chapter query. `mangas.filtered_scanlators` remains the serialised
+-- form used by the app model and by backups; this table is what the queries actually join to.
+CREATE TABLE excluded_scanlators(
+    manga_id INTEGER NOT NULL,
+    scanlator TEXT NOT NULL,
+    FOREIGN KEY(manga_id) REFERENCES mangas (_id)
+    ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX excluded_scanlators_manga_id_scanlator_index ON excluded_scanlators(manga_id, scanlator);
+
+getByMangaId:
+SELECT scanlator
+FROM excluded_scanlators
+WHERE manga_id = :mangaId;
+
+insert:
+INSERT OR IGNORE INTO excluded_scanlators(manga_id, scanlator)
+VALUES (:mangaId, :scanlator);
+
+deleteByMangaId:
+DELETE FROM excluded_scanlators
+WHERE manga_id = :mangaId;
