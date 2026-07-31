@@ -1600,7 +1600,13 @@ class MangaDetailsController :
         )
     }
 
-    fun sourceSearch(text: String) {
+    fun sourceSearch(text: String, asGenre: Boolean) {
+        val source = presenter.source as? CatalogueSource ?: return
+        if (!asGenre) {
+            // Author/artist names aren't filters, so browse the source with them as a query instead
+            router.pushController(BrowseSourceController(source, text).withFadeTransaction())
+            return
+        }
         when (
             val previousController =
                 router.backstack.getOrNull(router.backstackSize - 2)?.controller
@@ -1612,11 +1618,9 @@ class MangaDetailsController :
                 }
             }
             else -> {
-                if (presenter.source is CatalogueSource) {
-                    val controller = BrowseSourceController(presenter.source as CatalogueSource)
-                    router.pushController(controller.withFadeTransaction())
-                    controller.searchWithGenre(text)
-                }
+                val controller = BrowseSourceController(source)
+                router.pushController(controller.withFadeTransaction())
+                controller.searchWithGenre(text)
             }
         }
     }
@@ -1629,11 +1633,14 @@ class MangaDetailsController :
     override fun showFloatingActionMode(view: TextView, content: String?, isTag: Boolean) {
         finishFloatingActionMode()
         val previousController = previousController
-        val hasDifferentAuthors = view.id == R.id.manga_author &&
+        val isAuthorView = view.id == R.id.manga_author
+        val hasDifferentAuthors = isAuthorView &&
             manga?.hasSameAuthorAndArtist == false && manga?.author != null
         val isInSource = !isTag && previousController !is LibraryController &&
             previousController !is RecentsController
-        if (!hasDifferentAuthors && isInSource) {
+        // Authors can also be looked up on the manga's own source, so always offer the choice
+        val canSearchSource = isAuthorView && presenter.source is CatalogueSource
+        if (!hasDifferentAuthors && !canSearchSource && isInSource) {
             globalSearch(content ?: view.text.toString())
             return
         }
@@ -1646,12 +1653,10 @@ class MangaDetailsController :
         } else {
             FloatingMangaDetailsActionModeCallback(view, isTag = isTag)
         }
+        actionModeCallback.showSourceSearch = canSearchSource
         if (hasDifferentAuthors) {
             actionModeCallback.authorText = manga?.author
             actionModeCallback.artistText = manga?.artist
-            if (isInSource) {
-                actionModeCallback.isGlobalSearch = true
-            }
         }
         if (view is Chip) {
             view.isActivated = true
@@ -1976,6 +1981,12 @@ class MangaDetailsController :
         }
     }
 
+    private enum class SearchType {
+        GLOBAL,
+        SOURCE,
+        LIBRARY,
+    }
+
     inner class FloatingMangaDetailsActionModeCallback(
         private val textView: TextView?,
         private val showCopy: Boolean = true,
@@ -1994,7 +2005,8 @@ class MangaDetailsController :
         private var customText: String? = null
         var authorText: String? = null
         var artistText: String? = null
-        var isGlobalSearch: Boolean? = null
+        var showSourceSearch: Boolean = false
+        private var subTextSearchType: SearchType? = null
         val text: String
             get() {
                 return customText ?: if (textView?.isTextSelectable == true) {
@@ -2010,8 +2022,9 @@ class MangaDetailsController :
                 menu,
             )
             menu?.findItem(R.id.action_copy)?.isVisible = showCopy
+            val canSearchSource = (isTag || showSourceSearch) && presenter.source is CatalogueSource
             var sourceMenuItem = menu?.findItem(R.id.action_source_search)
-            sourceMenuItem?.isVisible = isTag && presenter.source is CatalogueSource
+            sourceMenuItem?.isVisible = canSearchSource
             val context = view?.context ?: return false
             val localItem = menu?.findItem(R.id.action_local_search) ?: return true
             localItem.isVisible = previousController !is FilteredLibraryController
@@ -2026,13 +2039,13 @@ class MangaDetailsController :
                 MR.strings.search_,
                 context.getString(MR.strings.artist).lowercase(Locale.getDefault()),
             )
-            if (isTag) {
-                if (previousController is BrowseSourceController) {
+            if (canSearchSource) {
+                if (isTag && previousController is BrowseSourceController) {
                     menu.removeItem(R.id.action_source_search)
                     sourceMenuItem = menu.add(0, R.id.action_source_search, 1, sourceMenuItem?.title)
                     sourceMenuItem?.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
                 }
-                sourceMenuItem?.icon = presenter.source.icon()
+                presenter.source.icon()?.let { sourceMenuItem?.icon = it }
             }
             return true
         }
@@ -2047,8 +2060,12 @@ class MangaDetailsController :
         ): Boolean {
             when (item?.itemId) {
                 R.id.action_copy -> copyContentToClipboard(text, null)
-                R.id.action_source_search -> sourceSearch(text)
-                R.id.action_global_search, R.id.action_local_search -> {
+                R.id.action_global_search, R.id.action_source_search, R.id.action_local_search -> {
+                    val searchType = when (item.itemId) {
+                        R.id.action_global_search -> SearchType.GLOBAL
+                        R.id.action_source_search -> SearchType.SOURCE
+                        else -> SearchType.LIBRARY
+                    }
                     if (authorText != null) {
                         mode?.menu?.findItem(R.id.action_copy)?.isVisible = false
                         mode?.menu?.findItem(R.id.action_local_search)?.isVisible = false
@@ -2056,24 +2073,17 @@ class MangaDetailsController :
                         mode?.menu?.findItem(R.id.action_global_search)?.isVisible = false
                         mode?.menu?.findItem(R.id.action_search_author)?.isVisible = true
                         mode?.menu?.findItem(R.id.action_search_artist)?.isVisible = true
-                        isGlobalSearch = item.itemId == R.id.action_global_search
+                        subTextSearchType = searchType
                         mode?.invalidate()
                         return true
-                    } else if (item.itemId == R.id.action_global_search) {
-                        globalSearch(text)
-                    } else {
-                        localSearch(text, isTag)
                     }
+                    search(searchType, text)
                 }
                 R.id.action_search_artist, R.id.action_search_author -> {
                     val subText =
                         (if (item.itemId == R.id.action_search_author) authorText else artistText)
                             ?: return false
-                    if (isGlobalSearch == true) {
-                        globalSearch(subText)
-                    } else {
-                        localSearch(subText, isTag)
-                    }
+                    search(subTextSearchType ?: SearchType.GLOBAL, subText)
                 }
                 else -> return false
             }
@@ -2081,6 +2091,14 @@ class MangaDetailsController :
                 mode?.finish()
             }
             return true
+        }
+
+        private fun search(searchType: SearchType, query: String) {
+            when (searchType) {
+                SearchType.GLOBAL -> globalSearch(query)
+                SearchType.SOURCE -> sourceSearch(query, asGenre = isTag)
+                SearchType.LIBRARY -> localSearch(query, isTag)
+            }
         }
 
         override fun onDestroyActionMode(mode: android.view.ActionMode?) {

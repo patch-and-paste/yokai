@@ -40,6 +40,9 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
   - Fix text disappeared when it's surrounded by `<>` (@lalalasupa0)
 
 ### Changes
+- Tapping an entry's author now offers to search that entry's own source as well as a global search
+  - Tapping it while browsing a source used to run a global search straight away, with no way to
+    look the author up on the source you were already in
 - Temporarily disable log file
 - Categories' header now show filtered count when you search the library when you have "Show number of items" enabled (@LeeSF03)
 - Chapter progress now saved everything the page is changed
