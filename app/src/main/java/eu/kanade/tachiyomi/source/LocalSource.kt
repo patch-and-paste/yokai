@@ -59,8 +59,23 @@ class LocalSource(private val context: Context) : CatalogueSource, UnmeteredSour
                 .mapNotNull { it?.findFile(url) }
         }
 
+        /**
+         * An `&` that does not open an entity reference. Hand-written ComicInfo files routinely
+         * carry one, as in `Batman & Robin`, and it is fatal to a conforming parser.
+         */
+        private val bareAmpersand = Regex("""&(?!(?:amp|lt|gt|quot|apos);|#\d+;|#x[0-9a-fA-F]+;)""")
+
+        /**
+         * A bare `<` is deliberately left alone: nothing short of a parser can tell it apart from
+         * the start of a tag, so escaping it would corrupt every well-formed document instead.
+         */
         fun decodeComicInfo(stream: InputStream, xml: XML = Injekt.get()): ComicInfo {
-            return AndroidXmlReader(stream, StandardCharsets.UTF_8.name()).use { reader ->
+            val repaired = stream.use { it.readBytes().toString(StandardCharsets.UTF_8) }
+                .replace(bareAmpersand, "&amp;")
+            return AndroidXmlReader(
+                repaired.byteInputStream(StandardCharsets.UTF_8),
+                StandardCharsets.UTF_8.name(),
+            ).use { reader ->
                 xml.decodeFromReader<ComicInfo>(reader)
             }
         }
