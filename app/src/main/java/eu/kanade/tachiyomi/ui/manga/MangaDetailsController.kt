@@ -211,6 +211,9 @@ class MangaDetailsController :
     private var trackingBottomSheet: TrackingBottomSheet? = null
     private var startingRangeChapterPos: Int? = null
     private var rangeMode: RangeMode? = null
+
+    /** Individual chapter picking, as opposed to the start-and-end range flow. */
+    private var selectMode = false
     private var editMangaDialog: EditMangaDialog? = null
     var refreshTracker: Int? = null
     private var chapterPopupMenu: Pair<Int, PopupMenu>? = null
@@ -938,6 +941,17 @@ class MangaDetailsController :
         val chapterItem = (adapter?.getItem(position) as? ChapterItem) ?: return false
         val chapter = chapterItem.chapter
         if (actionMode != null) {
+            if (selectMode) {
+                adapter?.toggleSelection(position)
+                (binding.recycler.findViewHolderForAdapterPosition(position) as? BaseFlexibleViewHolder)
+                    ?.toggleActivation()
+                if (adapter?.selectedItemCount == 0) {
+                    destroyActionModeIfNeeded()
+                } else {
+                    actionMode?.invalidate()
+                }
+                return false
+            }
             if (startingRangeChapterPos == null) {
                 adapter?.addSelection(position)
                 (binding.recycler.findViewHolderForAdapterPosition(position) as? BaseFlexibleViewHolder)
@@ -1016,6 +1030,13 @@ class MangaDetailsController :
                 ),
             )
         }
+        items.add(
+            MaterialMenuSheet.MenuSheetItem(
+                5,
+                R.drawable.ic_check_circle_24dp,
+                MR.strings.select_chapters,
+            ),
+        )
         val lastRead = presenter.allHistory.find { it.chapter_id == item.id }?.let {
             activity?.timeSpanFromNow(MR.strings.read_, it.last_read) + "\n"
         }
@@ -1027,6 +1048,7 @@ class MangaDetailsController :
                     2 -> startReadRange(position, RangeMode.Read)
                     3 -> startReadRange(position, RangeMode.Unread)
                     4 -> openChapterInWebView(item)
+                    5 -> startSelectMode(position)
                 }
                 true
             }
@@ -1871,14 +1893,45 @@ class MangaDetailsController :
     }
 
     override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
+        val selected = selectedChapters()
+        if (selected.isEmpty()) return true
+        when (item?.itemId) {
+            R.id.action_mark_selected_read -> markAsRead(selected)
+            R.id.action_mark_selected_unread -> markAsUnread(selected)
+            R.id.action_download_selected -> downloadChapters(selected)
+            R.id.action_delete_selected -> massDeleteChapters(
+                selected.filter { it.status != Download.State.NOT_DOWNLOADED },
+                false,
+            )
+            else -> return false
+        }
+        destroyActionModeIfNeeded()
         return true
     }
 
+    private fun selectedChapters(): List<ChapterItem> =
+        adapter?.selectedPositions.orEmpty().mapNotNull { adapter?.getItem(it) as? ChapterItem }
+
+    /** Starts individual selection with [position] already picked. */
+    private fun startSelectMode(position: Int) {
+        selectMode = true
+        createActionModeIfNeeded()
+        adapter?.addSelection(position)
+        (binding.recycler.findViewHolderForAdapterPosition(position) as? BaseFlexibleViewHolder)
+            ?.toggleActivation()
+        actionMode?.invalidate()
+    }
+
     override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+        if (selectMode) mode?.menuInflater?.inflate(R.menu.chapter_selection, menu)
         return true
     }
 
     override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+        if (selectMode) {
+            mode?.title = adapter?.selectedItemCount?.toString()
+            return true
+        }
         mode?.title = view?.context?.getString(
             if (startingRangeChapterPos == null) {
                 MR.strings.select_starting_chapter
@@ -1901,6 +1954,7 @@ class MangaDetailsController :
             )
         }
         rangeMode = null
+        selectMode = false
         startingRangeChapterPos = null
         adapter?.mode = SelectableAdapter.Mode.IDLE
         adapter?.clearSelection()
