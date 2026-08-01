@@ -1043,6 +1043,19 @@ class MangaDetailsPresenter(
         }
     }
 
+    /**
+     * Recommended titles for [title], or an empty list when AniList has nothing or is unreachable.
+     * AniList is the only tracker here that publishes a recommendation graph.
+     */
+    suspend fun getRecommendations(title: String): List<String> = withContext(Dispatchers.IO) {
+        try {
+            Injekt.get<TrackManager>().aniList.api.getRecommendations(title).map { it.title }.distinct()
+        } catch (e: Exception) {
+            Logger.e(e) { "Unable to load recommendations" }
+            emptyList()
+        }
+    }
+
     fun trackSearch(query: String, service: TrackService) {
         if (view?.isNotOnline() == false) {
             presenterScope.launch(Dispatchers.IO) {

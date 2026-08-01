@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.data.database.models.Track
 import eu.kanade.tachiyomi.data.track.anilist.dto.ALAddMangaResult
 import eu.kanade.tachiyomi.data.track.anilist.dto.ALCurrentUserResult
 import eu.kanade.tachiyomi.data.track.anilist.dto.ALOAuth
+import eu.kanade.tachiyomi.data.track.anilist.dto.ALRecommendationResult
 import eu.kanade.tachiyomi.data.track.anilist.dto.ALSearchResult
 import eu.kanade.tachiyomi.data.track.anilist.dto.ALUserListMangaQueryResult
 import eu.kanade.tachiyomi.data.track.model.TrackSearch
@@ -98,6 +99,34 @@ class AnilistApi(val client: OkHttpClient, interceptor: AnilistInterceptor) {
                 .awaitSuccess()
                 .parseAs<ALSearchResult>()
                 .data.page.media
+                .map { it.toALManga().toTrack() }
+        }
+    }
+
+    /**
+     * Titles AniList readers pointed at from the closest match for [search], best rated first.
+     * Recommendations are titles rather than sources, so the caller has to look each one up.
+     */
+    suspend fun getRecommendations(search: String): List<TrackSearch> {
+        return withIOContext {
+            val payload = buildJsonObject {
+                put("query", recommendationQuery())
+                putJsonObject("variables") {
+                    put("query", search)
+                }
+            }
+            // The plain client, not authClient: recommendations are public, and the auth
+            // interceptor throws outright when no token is stored
+            client.newCall(POST(API_URL, body = payload.toString().toRequestBody(jsonMime)))
+                .awaitSuccess()
+                .parseAs<ALRecommendationResult>()
+                .data.page.media
+                .firstOrNull()
+                ?.recommendations
+                ?.nodes
+                .orEmpty()
+                .sortedByDescending { it.rating ?: 0 }
+                .mapNotNull { it.mediaRecommendation }
                 .map { it.toALManga().toTrack() }
         }
     }
@@ -261,6 +290,41 @@ class AnilistApi(val client: OkHttpClient, interceptor: AnilistInterceptor) {
                             |day
                         |}
                         |averageScore
+                    |}
+                |}
+            |}
+            |
+            """.trimMargin()
+
+        fun recommendationQuery() =
+            """
+            |query Recommend(${'$'}query: String) {
+                |Page (perPage: 1) {
+                    |media(search: ${'$'}query, type: MANGA, format_not_in: [NOVEL]) {
+                        |recommendations (sort: RATING_DESC, perPage: 25) {
+                            |nodes {
+                                |rating
+                                |mediaRecommendation {
+                                    |id
+                                    |title {
+                                        |userPreferred
+                                    |}
+                                    |coverImage {
+                                        |large
+                                    |}
+                                    |format
+                                    |status
+                                    |chapters
+                                    |description
+                                    |startDate {
+                                        |year
+                                        |month
+                                        |day
+                                    |}
+                                    |averageScore
+                                |}
+                            |}
+                        |}
                     |}
                 |}
             |}

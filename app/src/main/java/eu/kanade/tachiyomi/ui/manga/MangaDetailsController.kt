@@ -1259,6 +1259,7 @@ class MangaDetailsController :
             }
             R.id.action_open_in_web_view -> openInWebView()
             R.id.action_refresh_tracking -> presenter.refreshTracking(true)
+            R.id.action_recommendations -> showRecommendations()
             R.id.action_migrate ->
                 if (!isNotOnline()) {
                     PreMigrationController.navigateToMigration(
@@ -1646,6 +1647,31 @@ class MangaDetailsController :
                 router.pushController(controller.withFadeTransaction())
                 controller.searchWithGenre(text)
             }
+        }
+    }
+
+    /**
+     * Lists what AniList readers pointed at from this title. They are titles rather than sources,
+     * so picking one hands it to global search.
+     */
+    private fun showRecommendations() {
+        if (isNotOnline()) return
+        val manga = manga ?: return
+        val activity = activity ?: return
+
+        viewScope.launchUI {
+            val titles = presenter.getRecommendations(manga.title)
+            if (titles.isEmpty()) {
+                view?.snack(MR.strings.no_recommendations_found)
+                return@launchUI
+            }
+            activity.materialAlertDialog()
+                .setTitle(activity.getString(MR.strings.recommendations))
+                .setNegativeButton(AR.string.cancel, null)
+                .setItems(titles.toTypedArray()) { _, index ->
+                    globalSearch(titles[index])
+                }
+                .show()
         }
     }
 
