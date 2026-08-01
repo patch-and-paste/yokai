@@ -116,6 +116,9 @@ class PreferencesHelper(val context: Context, val preferenceStore: PreferenceSto
 
     fun rotateWidePages() = preferenceStore.getBoolean("rotate_wide_pages", false)
 
+    /** 0 off, 1 white, 2 black, 3 white then black. Clears e-ink ghosting between pages. */
+    fun pageFlashMode() = preferenceStore.getInt("page_flash_mode", 0)
+
     fun grayscale() = preferenceStore.getBoolean("pref_grayscale", false)
 
     fun invertedColors() = preferenceStore.getBoolean("pref_inverted_colors", false)

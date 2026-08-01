@@ -19,6 +19,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.LayerDrawable
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import android.os.Bundle
 import android.text.TextUtils
 import android.text.style.DynamicDrawableSpan
@@ -205,6 +206,8 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
     private var menuTemporarilyVisible = false
 
     private var coroutine: Job? = null
+    private var pageFlashJob: Job? = null
+    private var lastPageFlashAt = 0L
 
     private var fromUrl = false
 
@@ -255,6 +258,11 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
     private val basePreferences: BasePreferences by injectLazy()
 
     companion object {
+        private const val PAGE_FLASH_WHITE = 1
+        private const val PAGE_FLASH_BLACK = 2
+        private const val PAGE_FLASH_DURATION_MS = 60L
+        private const val PAGE_FLASH_MIN_GAP_MS = 400L
+
 
         const val SHIFT_DOUBLE_PAGES = "shiftingDoublePages"
         const val SHIFTED_PAGE_INDEX = "shiftedPageIndex"
@@ -686,6 +694,40 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
             write.join()
             invalidateOptionsMenu()
             binding.chaptersSheet.chaptersBottomSheet.refreshList(scrollToCurrent = false)
+        }
+    }
+
+    /**
+     * Paints the screen over for a few frames on page turn. An e-ink panel keeps a trace of the
+     * previous page otherwise, and a full repaint is what clears it.
+     */
+    private fun flashScreen() {
+        val mode = preferences.pageFlashMode().get()
+        if (mode == 0) return
+
+        // Long strip reports a page change for every image that scrolls past, so a drag through a
+        // chapter would strobe. One flash per settling counts; the rest are dropped.
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastPageFlashAt < PAGE_FLASH_MIN_GAP_MS) return
+        lastPageFlashAt = now
+
+        pageFlashJob?.cancel()
+        pageFlashJob = lifecycleScope.launch {
+            val overlay = binding.pageFlashOverlay
+            val colors = when (mode) {
+                PAGE_FLASH_WHITE -> listOf(Color.WHITE)
+                PAGE_FLASH_BLACK -> listOf(Color.BLACK)
+                else -> listOf(Color.WHITE, Color.BLACK)
+            }
+            try {
+                colors.forEach { color ->
+                    overlay.setBackgroundColor(color)
+                    overlay.isVisible = true
+                    delay(PAGE_FLASH_DURATION_MS)
+                }
+            } finally {
+                overlay.isVisible = false
+            }
         }
     }
 
@@ -1523,6 +1565,7 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
      */
     @SuppressLint("SetTextI18n")
     fun onPageSelected(page: ReaderPage, hasExtraPage: Boolean) {
+        flashScreen()
         viewModel.onPageSelected(page, hasExtraPage)
         val pages = page.chapter.pages ?: return
 

@@ -75,6 +75,11 @@
     <string name="all_chapters_read">All chapters read</string>
     <string name="bookmarked">Bookmarked</string>
     <string name="rotate_wide_pages">Rotate wide pages to fit</string>
+    <string name="page_flash">Flash the screen on page turn</string>
+    <string name="page_flash_summary">Clears ghosting on e-ink displays</string>
+    <string name="page_flash_white">White</string>
+    <string name="page_flash_black">Black</string>
+    <string name="page_flash_white_then_black">White then black</string>
     <string name="not_bookmarked">Not bookmarked</string>
     <string name="marked_as_read">Marked as read</string>
     <string name="marked_as_unread">Marked as unread</string>

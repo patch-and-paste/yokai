@@ -94,4 +94,10 @@
         android:layout_height="match_parent"
         android:visibility="gone" />
 
+    <View
+        android:id="@+id/page_flash_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -266,6 +266,19 @@ class SettingsReaderController : SettingsLegacyController() {
                 titleRes = MR.strings.rotate_wide_pages
             }
             intListPreference(activity) {
+                bindTo(preferences.pageFlashMode())
+                titleRes = MR.strings.page_flash
+                summaryRes = MR.strings.page_flash_summary
+                entryValues = listOf(0, 1, 2, 3)
+                entriesRes = arrayOf(
+                    MR.strings.disabled,
+                    MR.strings.page_flash_white,
+                    MR.strings.page_flash_black,
+                    MR.strings.page_flash_white_then_black,
+                )
+                defaultValue = 0
+            }
+            intListPreference(activity) {
                 key = Keys.zoomStart
                 titleRes = MR.strings.zoom_start_position
                 entriesRes = arrayOf(
