@@ -273,6 +273,58 @@ class SettingsAdvancedLegacyController : SettingsLegacyController() {
                 }
             }
             intListPreference(activity) {
+                bindTo(networkPreferences.proxyType())
+                titleMRes = MR.strings.proxy
+                summaryMRes = MR.strings.proxy_summary
+                entryValues = listOf(
+                    NetworkPreferences.PROXY_NONE,
+                    NetworkPreferences.PROXY_HTTP,
+                    NetworkPreferences.PROXY_SOCKS,
+                )
+                entries = listOf(context.getString(MR.strings.disabled), "HTTP", "SOCKS5")
+                defaultValue = NetworkPreferences.PROXY_NONE
+                onChange {
+                    activity?.toast(MR.strings.requires_app_restart)
+                    true
+                }
+            }
+            editTextPreference(activity) {
+                bindTo(networkPreferences.proxyHost())
+                titleMRes = MR.strings.proxy_host
+                onChange {
+                    activity?.toast(MR.strings.requires_app_restart)
+                    true
+                }
+                networkPreferences.proxyType().changesIn(viewScope) { isVisible = it != NetworkPreferences.PROXY_NONE }
+            }
+            editTextPreference(activity) {
+                bindTo(networkPreferences.proxyPort())
+                titleMRes = MR.strings.proxy_port
+                onChange {
+                    activity?.toast(MR.strings.requires_app_restart)
+                    true
+                }
+                networkPreferences.proxyType().changesIn(viewScope) { isVisible = it != NetworkPreferences.PROXY_NONE }
+            }
+            editTextPreference(activity) {
+                bindTo(networkPreferences.proxyUsername())
+                titleMRes = MR.strings.proxy_username
+                onChange {
+                    activity?.toast(MR.strings.requires_app_restart)
+                    true
+                }
+                networkPreferences.proxyType().changesIn(viewScope) { isVisible = it != NetworkPreferences.PROXY_NONE }
+            }
+            editTextPreference(activity) {
+                bindTo(networkPreferences.proxyPassword())
+                titleMRes = MR.strings.proxy_password
+                onChange {
+                    activity?.toast(MR.strings.requires_app_restart)
+                    true
+                }
+                networkPreferences.proxyType().changesIn(viewScope) { isVisible = it != NetworkPreferences.PROXY_NONE }
+            }
+            intListPreference(activity) {
                 key = PreferenceKeys.dohProvider
                 titleMRes = MR.strings.doh
                 val entryMap = mapOf(
