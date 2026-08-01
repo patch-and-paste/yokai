@@ -668,6 +668,9 @@ class LibraryPresenter(
         val sortFn: (LibraryItem, LibraryItem) -> Int = { i1, i2 ->
             val category = i1.header.category
             val compare = when {
+                // Two placeholders have to compare equal, otherwise compare(a, b) and compare(b, a)
+                // both report -1 and TimSort rejects the comparator.
+                i1 is LibraryPlaceholderItem && i2 is LibraryPlaceholderItem -> 0
                 i1 is LibraryPlaceholderItem -> -1
                 i2 is LibraryPlaceholderItem -> 1
                 i1 !is LibraryMangaItem || i2 !is LibraryMangaItem -> 0
@@ -750,6 +753,7 @@ class LibraryPresenter(
                     .shuffled(Random(libraryPreferences.randomSortSeed().get()))
                     .sortedWith { i1, i2 ->
                         when {
+                            i1 is LibraryPlaceholderItem && i2 is LibraryPlaceholderItem -> 0
                             i1 is LibraryPlaceholderItem -> -1
                             i2 is LibraryPlaceholderItem -> 1
                             else -> 0
@@ -761,8 +765,9 @@ class LibraryPresenter(
             values.sortedWith(Comparator(sortFn))
         }.toSortedMap { category, category2 ->
             when {
-                // Force default category to always be at the top. This also for some reason fixed a bug where Default
-                // category would disappear whenever a new category is added.
+                // Force default category to always be at the top. It has to compare equal to
+                // itself, or the sorted map can never look the Default category back up.
+                category.id == 0 && category2.id == 0 -> 0
                 category.id == 0 -> -1
                 category2.id == 0 -> 1
                 else -> category.order.compareTo(category2.order)
