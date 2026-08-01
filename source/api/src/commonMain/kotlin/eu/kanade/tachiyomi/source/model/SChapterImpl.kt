@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.source.model
 
 import eu.kanade.tachiyomi.util.EMPTY
+import kotlin.jvm.Transient
 import kotlinx.serialization.json.JsonObject
 
 class SChapterImpl : SChapter {
@@ -15,5 +16,6 @@ class SChapterImpl : SChapter {
 
     override var scanlator: String? = null
 
+    @Transient
     override var memo: JsonObject = JsonObject.EMPTY
 }

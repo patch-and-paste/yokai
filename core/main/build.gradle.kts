@@ -37,7 +37,7 @@ kotlin {
                 api(libs.koin.core)
                 api(libs.koin.injekt)
 
-                // Network client
+                // Network client (OkHttp 5.2+ required for CompressionInterceptor used by extlib 1.6)
                 api(libs.okhttp)
                 api(libs.okhttp.logging.interceptor)
                 api(libs.okhttp.dnsoverhttps)

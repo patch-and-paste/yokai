@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.source.model
 
 import eu.kanade.tachiyomi.util.EMPTY
+import kotlin.jvm.Transient
 import kotlinx.serialization.json.JsonObject
 
 class SMangaImpl : SManga {
@@ -23,6 +24,7 @@ class SMangaImpl : SManga {
 
     override var update_strategy: UpdateStrategy = UpdateStrategy.ALWAYS_UPDATE
 
+    @Transient
     override var memo: JsonObject = JsonObject.EMPTY
 
     override var initialized: Boolean = false

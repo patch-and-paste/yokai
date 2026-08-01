@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.source.model
 
+import eu.kanade.tachiyomi.util.EMPTY
 import java.io.Serializable
 import kotlinx.serialization.json.JsonObject
 
@@ -54,7 +55,7 @@ interface SManga : Serializable {
         it.status = status
         it.thumbnail_url = thumbnail_url
         it.update_strategy = update_strategy
-        it.memo = memo
+        it.memo = safeMemo()
         it.initialized = initialized
     }
 
@@ -71,4 +72,14 @@ interface SManga : Serializable {
             return SMangaImpl()
         }
     }
+}
+
+/**
+ * Reads [SManga.memo] from extension binaries compiled before the property existed, where
+ * touching it raises a [LinkageError] rather than returning a value.
+ */
+fun SManga.safeMemo(): JsonObject = try {
+    memo
+} catch (_: LinkageError) {
+    JsonObject.EMPTY
 }

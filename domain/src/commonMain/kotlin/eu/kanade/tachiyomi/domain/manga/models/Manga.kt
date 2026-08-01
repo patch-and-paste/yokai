@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.domain.manga.models
 
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.safeMemo
 import java.util.Locale
 import yokai.domain.manga.models.MangaUpdate
 
@@ -79,8 +80,9 @@ interface Manga : SManga {
 
         // Sources on the pre-1.6 bridge always return an empty memo, which must not wipe a
         // value a 1.6 extension stored earlier
-        if (other.memo.isNotEmpty()) {
-            memo = other.memo
+        val incomingMemo = other.safeMemo()
+        if (incomingMemo.isNotEmpty()) {
+            memo = incomingMemo
         }
 
         if (!initialized) {

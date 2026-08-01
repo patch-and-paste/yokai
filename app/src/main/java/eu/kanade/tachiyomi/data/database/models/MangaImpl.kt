@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.domain.manga.models.Manga
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.util.EMPTY
+import kotlin.jvm.Transient
 import kotlinx.serialization.json.JsonObject
 import uy.kohesive.injekt.injectLazy
 
@@ -72,6 +73,7 @@ open class MangaImpl(
 
     override var update_strategy: UpdateStrategy = UpdateStrategy.ALWAYS_UPDATE
 
+    @Transient
     override var memo: JsonObject = JsonObject.EMPTY
 
     // TODO: It's probably fine to set this to non-null string in the future

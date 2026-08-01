@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.source.model
 
+import eu.kanade.tachiyomi.util.EMPTY
 import java.io.Serializable
 import kotlinx.serialization.json.JsonObject
 
@@ -35,7 +36,7 @@ interface SChapter : Serializable {
         date_upload = other.date_upload
         chapter_number = other.chapter_number
         scanlator = other.scanlator
-        memo = other.memo
+        memo = other.safeMemo()
     }
 
     companion object {
@@ -43,4 +44,14 @@ interface SChapter : Serializable {
             return SChapterImpl()
         }
     }
+}
+
+/**
+ * Reads [SChapter.memo] from extension binaries compiled before the property existed, where
+ * touching it raises a [LinkageError] rather than returning a value.
+ */
+fun SChapter.safeMemo(): JsonObject = try {
+    memo
+} catch (_: LinkageError) {
+    JsonObject.EMPTY
 }
