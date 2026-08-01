@@ -1037,6 +1037,15 @@ class MangaDetailsController :
                 MR.strings.select_chapters,
             ),
         )
+        if (presenter.manga.isLocal()) {
+            items.add(
+                MaterialMenuSheet.MenuSheetItem(
+                    6,
+                    R.drawable.ic_book_open_split_24dp,
+                    MR.strings.split_chapter,
+                ),
+            )
+        }
         val lastRead = presenter.allHistory.find { it.chapter_id == item.id }?.let {
             activity?.timeSpanFromNow(MR.strings.read_, it.last_read) + "\n"
         }
@@ -1049,6 +1058,7 @@ class MangaDetailsController :
                     3 -> startReadRange(position, RangeMode.Unread)
                     4 -> openChapterInWebView(item)
                     5 -> startSelectMode(position)
+                    6 -> confirmSplitChapter(item.chapter)
                 }
                 true
             }
@@ -1925,6 +1935,10 @@ class MangaDetailsController :
             R.id.action_mark_selected_read -> markAsRead(selected)
             R.id.action_mark_selected_unread -> markAsUnread(selected)
             R.id.action_download_selected -> downloadChapters(selected)
+            R.id.action_merge_selected -> {
+                confirmMergeChapters(selected.map { it.chapter })
+                return true
+            }
             R.id.action_delete_selected -> massDeleteChapters(
                 selected.filter { it.status != Download.State.NOT_DOWNLOADED },
                 false,
@@ -1933,6 +1947,51 @@ class MangaDetailsController :
         }
         destroyActionModeIfNeeded()
         return true
+    }
+
+    /**
+     * Only offered for local entries: anywhere else the folder is a download that the next library
+     * update would put back.
+     */
+    private fun confirmMergeChapters(chapters: List<Chapter>) {
+        val activity = activity ?: return
+        if (chapters.size < 2) return
+        if (presenter.manga.isLocal().not()) {
+            view?.snack(MR.strings.local_source_only)
+            return
+        }
+        // Merging follows the order shown, so the reader gets what they see
+        val ordered = chapters.sortedBy { it.source_order }
+        activity.materialAlertDialog()
+            .setTitle(activity.getString(MR.strings.merge_chapters))
+            .setMessage(activity.getString(MR.strings.merge_chapters_question, ordered.first().name))
+            .setNegativeButton(AR.string.cancel, null)
+            .setPositiveButton(AR.string.ok) { _, _ ->
+                destroyActionModeIfNeeded()
+                presenter.mergeLocalChapters(ordered)
+            }
+            .show()
+    }
+
+    /** Asks where to cut, then hands the page index to the presenter. */
+    private fun confirmSplitChapter(chapter: Chapter) {
+        val activity = activity ?: return
+        viewScope.launchUI {
+            val pageCount = presenter.localPageCount(chapter)
+            if (pageCount < 2) {
+                view?.snack(MR.strings.split_chapter_too_short)
+                return@launchUI
+            }
+            val choices = (1 until pageCount).map { it.toString() }.toTypedArray()
+            activity.materialAlertDialog()
+                .setTitle(activity.getString(MR.strings.split_chapter))
+                .setMessage(activity.getString(MR.strings.split_chapter_question, pageCount))
+                .setNegativeButton(AR.string.cancel, null)
+                .setItems(choices) { _, index ->
+                    presenter.splitLocalChapter(chapter, index + 1)
+                }
+                .show()
+        }
     }
 
     private fun selectedChapters(): List<ChapterItem> =

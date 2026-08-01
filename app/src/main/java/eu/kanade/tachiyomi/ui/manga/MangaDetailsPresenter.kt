@@ -54,6 +54,7 @@ import eu.kanade.tachiyomi.util.chapter.ChapterFilter
 import eu.kanade.tachiyomi.util.chapter.ChapterSort
 import eu.kanade.tachiyomi.util.chapter.ChapterUtil
 import eu.kanade.tachiyomi.util.chapter.syncChaptersWithSource
+import eu.kanade.tachiyomi.util.chapter.LocalChapterEditor
 import eu.kanade.tachiyomi.util.chapter.syncChaptersWithTrackServiceTwoWay
 import eu.kanade.tachiyomi.util.chapter.syncReadProgressFromTracker
 import eu.kanade.tachiyomi.util.chapter.updateTrackChapterMarkedAsRead
@@ -1053,6 +1054,45 @@ class MangaDetailsPresenter(
         } catch (e: Exception) {
             Logger.e(e) { "Unable to load recommendations" }
             emptyList()
+        }
+    }
+
+    /**
+     * Folds [chapters] into the first of them on disk and refreshes, so the local source picks up
+     * the new shape. Errors surface as a snack rather than leaving the list looking stale.
+     */
+    fun mergeLocalChapters(chapters: List<Chapter>) {
+        presenterScope.launchNonCancellableIO {
+            try {
+                LocalChapterEditor.merge(LocalSource(preferences.context), chapters)
+                refreshAll()
+                withUIContext { view?.showError(preferences.context.getString(MR.strings.chapters_merged)) }
+            } catch (e: Exception) {
+                Logger.e(e) { "Unable to merge chapters" }
+                withUIContext { view?.showError(e.message.orEmpty()) }
+            }
+        }
+    }
+
+    /** Pages in a local chapter, or 0 when it is not a folder this can work on. */
+    suspend fun localPageCount(chapter: Chapter): Int = withContext(Dispatchers.IO) {
+        try {
+            LocalChapterEditor.pageCount(LocalSource(preferences.context), chapter)
+        } catch (e: Exception) {
+            0
+        }
+    }
+
+    fun splitLocalChapter(chapter: Chapter, pageIndex: Int) {
+        presenterScope.launchNonCancellableIO {
+            try {
+                LocalChapterEditor.split(LocalSource(preferences.context), chapter, pageIndex)
+                refreshAll()
+                withUIContext { view?.showError(preferences.context.getString(MR.strings.chapter_split)) }
+            } catch (e: Exception) {
+                Logger.e(e) { "Unable to split chapter" }
+                withUIContext { view?.showError(e.message.orEmpty()) }
+            }
         }
     }
 
