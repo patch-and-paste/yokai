@@ -107,6 +107,16 @@ class ExtensionBottomPresenter : BaseMigrationPresenter<ExtensionBottomSheet>() 
         }
     }
 
+    /**
+     * A factory extension is published under the aggregate language "all", which says nothing
+     * about whether it carries a site in a language the reader enabled. Ask its sources when the
+     * repo lists them; legacy repos that omit them fall back to the aggregate.
+     */
+    private fun Extension.Available.matchesEnabledLanguages(enabled: Set<String>): Boolean {
+        val sourceLangs = sources.map { it.lang }.filter { it.isNotBlank() }
+        return if (sourceLangs.isEmpty()) lang in enabled else sourceLangs.any { it in enabled }
+    }
+
     @Synchronized
     private fun toItems(tuple: ExtensionTuple): List<ExtensionItem> {
         val context = view?.context ?: return emptyList()
@@ -151,7 +161,7 @@ class ExtensionBottomPresenter : BaseMigrationPresenter<ExtensionBottomSheet>() 
             .filter { avail ->
                 installed.none { it.pkgName == avail.pkgName } &&
                     untrusted.none { it.pkgName == avail.pkgName } &&
-                    (avail.lang in activeLangs) &&
+                    avail.matchesEnabledLanguages(activeLangs) &&
                     (avail.contentRating <= allowedContentRating)
             }
             // Mirrored repos would otherwise put the same extension in the list more than once
