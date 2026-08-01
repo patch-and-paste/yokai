@@ -180,6 +180,25 @@ class SettingsLibraryController : SettingsLegacyController() {
                 }
             }
 
+            intListPreference(activity) {
+                bindTo(preferences.libraryUpdateStartHour())
+                titleRes = MR.strings.library_update_start_hour
+                summaryRes = MR.strings.library_update_start_hour_summary
+                entryValues = listOf(-1) + (0..23).toList()
+                entries = listOf(context.getString(MR.strings.disabled)) +
+                    (0..23).map { "%02d:00".format(it) }
+                defaultValue = -1
+
+                onChange {
+                    LibraryUpdateJob.setupTask(context)
+                    true
+                }
+
+                preferences.libraryUpdateInterval().changesIn(viewScope) {
+                    isVisible = it > 0
+                }
+            }
+
             multiSelectListPreferenceMat(activity) {
                 bindTo(preferences.libraryUpdateMangaRestriction())
                 titleRes = MR.strings.pref_library_update_manga_restriction

@@ -213,6 +213,9 @@ class PreferencesHelper(val context: Context, val preferenceStore: PreferenceSto
 
     fun libraryUpdateInterval() = preferenceStore.getInt(Keys.libraryUpdateInterval, 24)
 
+    /** Hour of day the periodic update should first land on, or -1 to leave it unscheduled. */
+    fun libraryUpdateStartHour() = preferenceStore.getInt("library_update_start_hour", -1)
+
     fun libraryUpdateLastTimestamp() = preferenceStore.getLong("library_update_last_timestamp", 0L)
 
     fun libraryUpdateDeviceRestriction() = preferenceStore.getStringSet("library_update_restriction", setOf(DEVICE_ONLY_ON_WIFI))

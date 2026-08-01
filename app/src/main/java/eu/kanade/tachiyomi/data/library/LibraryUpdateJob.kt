@@ -59,6 +59,7 @@ import eu.kanade.tachiyomi.util.system.tryToSetForeground
 import eu.kanade.tachiyomi.util.system.withIOContext
 import java.io.File
 import java.lang.ref.WeakReference
+import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.CancellationException
 import java.util.concurrent.TimeUnit
@@ -681,6 +682,23 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
         fun runExtensionUpdatesAfterJob() { runExtensionUpdatesAfter = true }
 
+        /**
+         * Milliseconds from now until [hour] o'clock, today if it is still ahead and tomorrow
+         * otherwise. This only sets where the repeating window starts; WorkManager still decides
+         * when within it the job actually runs.
+         */
+        private fun millisUntilHour(hour: Int): Long {
+            val now = Calendar.getInstance()
+            val target = (now.clone() as Calendar).apply {
+                set(Calendar.HOUR_OF_DAY, hour)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                if (before(now)) add(Calendar.DAY_OF_YEAR, 1)
+            }
+            return target.timeInMillis - now.timeInMillis
+        }
+
         fun setupTask(context: Context, prefInterval: Int? = null) {
             val preferences = Injekt.get<PreferencesHelper>()
             val interval = prefInterval ?: preferences.libraryUpdateInterval().get()
@@ -702,6 +720,12 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     .addTag(TAG)
                     .addTag(WORK_NAME_AUTO)
                     .setConstraints(constraints)
+                    .apply {
+                        val startHour = preferences.libraryUpdateStartHour().get()
+                        if (startHour in 0..23) {
+                            setInitialDelay(millisUntilHour(startHour), TimeUnit.MILLISECONDS)
+                        }
+                    }
                     .build()
 
                 WorkManager.getInstance(context).enqueueUniquePeriodicWork(

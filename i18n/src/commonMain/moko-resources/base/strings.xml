@@ -226,6 +226,8 @@
 
     <!-- Library settings -->
     <string name="library_update_frequency">Library update frequency</string>
+    <string name="library_update_start_hour">Start updates around</string>
+    <string name="library_update_start_hour_summary">The system still picks the exact moment within the update window</string>
     <string name="pref_library_update_manga_restriction">Skip updating titles</string>
     <string name="pref_update_only_completely_read">With unread chapter(s)</string>
     <string name="pref_update_only_non_completed">With \"Completed\" status</string>
