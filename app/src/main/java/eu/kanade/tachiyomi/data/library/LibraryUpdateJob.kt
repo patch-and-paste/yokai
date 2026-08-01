@@ -530,13 +530,15 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
         val categoriesToExclude =
             preferences.libraryUpdateCategoriesExclude().get().map(String::toInt)
-        val listToExclude = if (categoriesToExclude.isNotEmpty() && categoryId == -1) {
-            libraryManga.filter { it.category in categoriesToExclude }.toSet()
+        // libraryManga holds one row per manga and category, and listToUpdate kept the row for the
+        // included category, so excluding has to match on the manga rather than on the row.
+        val mangaIdsToExclude = if (categoriesToExclude.isNotEmpty() && categoryId == -1) {
+            libraryManga.filter { it.category in categoriesToExclude }.map { it.manga.id }.toSet()
         } else {
             emptySet()
         }
 
-        return listToUpdate.minus(listToExclude)
+        return listToUpdate.filterNot { it.manga.id in mangaIdsToExclude }
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
