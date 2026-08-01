@@ -80,6 +80,15 @@ class TrackSearchItem(val trackSearch: TrackSearch) : AbstractItem<TrackSearchIt
             } else {
                 binding.trackSearchStartResult.text = track.start_date
             }
+
+            // Only AniList reports a public average today. The rest leave it at zero, and a
+            // zero here means "not reported" rather than a genuine score of nothing.
+            val hasScore = track.score > 0f
+            binding.trackSearchScore.isVisible = hasScore
+            binding.trackSearchScoreResult.isVisible = hasScore
+            if (hasScore) {
+                binding.trackSearchScoreResult.text = track.score.toInt().toString()
+            }
         }
 
         override fun unbindView(item: TrackSearchItem) {

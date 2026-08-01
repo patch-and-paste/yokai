@@ -113,6 +113,31 @@
         tools:text="Ongoing" />
 
     <TextView
+        android:id="@+id/track_search_score"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:maxLines="1"
+        android:text="@string/score"
+        style="?textAppearanceTitleMedium"
+        android:textSize="14sp"
+        app:layout_constraintStart_toEndOf="@id/track_search_cover"
+        app:layout_constraintTop_toBottomOf="@id/track_search_status"
+        />
+
+    <TextView
+        android:id="@+id/track_search_score_result"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:maxLines="1"
+        style="?textAppearanceBodySmall"
+        android:textSize="14sp"
+        app:layout_constraintStart_toEndOf="@id/track_search_score"
+        app:layout_constraintTop_toBottomOf="@id/track_search_status"
+        tools:text="84" />
+
+    <TextView
         android:id="@+id/track_search_summary"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -176,5 +201,5 @@
         app:layout_constraintTop_toBottomOf="@id/track_search_summary"
         android:layout_marginBottom="8dp"
         app:barrierDirection="bottom"
-        app:constraint_referenced_ids="track_search_cover,track_search_status" />
+        app:constraint_referenced_ids="track_search_cover,track_search_score" />
 </androidx.constraintlayout.widget.ConstraintLayout>
