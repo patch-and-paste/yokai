@@ -56,6 +56,7 @@ import eu.kanade.tachiyomi.util.system.withUIContext
 import java.util.Date
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -442,10 +443,10 @@ class ReaderViewModel(
         return lastPage
     }
 
-    fun toggleRead(chapter: Chapter) {
+    fun toggleRead(chapter: Chapter): Job {
         chapter.read = !chapter.read
         val lastPageToSave = if (chapter.read) chapter.last_page_read.toLong() else 0L 
-        viewModelScope.launchNonCancellableIO {
+        return viewModelScope.launchNonCancellableIO {
             updateChapter.await(
                 ChapterUpdate(
                     id = chapter.id!!,
@@ -457,9 +458,9 @@ class ReaderViewModel(
             )
         }
     }
-    fun toggleBookmark(chapter: Chapter) {
+    fun toggleBookmark(chapter: Chapter): Job {
         chapter.bookmark = !chapter.bookmark
-        viewModelScope.launchNonCancellableIO {
+        return viewModelScope.launchNonCancellableIO {
             updateChapter.await(
                 ChapterUpdate(
                     id = chapter.id!!,

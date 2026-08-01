@@ -32,6 +32,7 @@ import eu.kanade.tachiyomi.util.view.collapse
 import eu.kanade.tachiyomi.util.view.expand
 import eu.kanade.tachiyomi.util.view.isCollapsed
 import eu.kanade.tachiyomi.util.view.isExpanded
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
@@ -207,8 +208,7 @@ class ReaderChapterSheet @JvmOverloads constructor(context: Context, attrs: Attr
             if (!sheetBehavior.isExpanded() || activity.isLoading) {
                 false
             } else {
-                viewModel.toggleRead(item.chapter)
-                refreshList()
+                refreshAfter(viewModel.toggleRead(item.chapter))
                 true
             }
         }
@@ -229,8 +229,7 @@ class ReaderChapterSheet @JvmOverloads constructor(context: Context, attrs: Attr
                     item: ReaderChapterItem,
                 ) {
                     if (!activity.isLoading && sheetBehavior.isExpanded()) {
-                        viewModel.toggleBookmark(item.chapter)
-                        refreshList()
+                        refreshAfter(viewModel.toggleBookmark(item.chapter))
                     }
                 }
             },
@@ -269,13 +268,30 @@ class ReaderChapterSheet @JvmOverloads constructor(context: Context, attrs: Attr
         itemView?.progress?.isVisible = false
     }
 
-    fun refreshList() {
+    /**
+     * Rebuilds the list once [write] has landed. getChapters() reads back from the database, so
+     * refreshing before the toggle is persisted reverts the row the user just tapped.
+     */
+    private fun refreshAfter(write: Job) {
+        launchUI {
+            write.join()
+            refreshList(scrollToCurrent = false)
+        }
+    }
+
+    /**
+     * @param scrollToCurrent centre the list on the chapter being read. Toggling a row leaves the
+     * list where the reader scrolled it instead.
+     */
+    fun refreshList(scrollToCurrent: Boolean = true) {
         launchUI {
             val chapters = viewModel.getChapters()
 
             selectedChapterId = chapters.find { it.isCurrent }?.chapter?.id ?: -1L
             itemAdapter.clear()
             itemAdapter.add(chapters)
+
+            if (!scrollToCurrent) return@launchUI
 
             (binding.chapterRecycler.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(
                 adapter?.getPosition(viewModel.getCurrentChapter()?.chapter?.id ?: 0L) ?: 0,
