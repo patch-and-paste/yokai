@@ -356,7 +356,9 @@ class ExtensionDetailsController(bundle: Bundle? = null) :
         val matPref = when (preference) {
             is EditTextPreference -> EditTextResetPreference(activity, context).apply {
                 dialogSummary = preference.dialogMessage
-                onPreferenceChangeListener = preference.onPreferenceChangeListener
+                // Extensions cast the preference their listener receives back to EditTextPreference,
+                // so it has to be handed the original and not this stand-in.
+                onChange { preference.callChangeListener(it) }
             }
 
             is ListPreference -> ListMatPreference(activity, context).apply {
