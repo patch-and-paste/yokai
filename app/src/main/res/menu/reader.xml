@@ -3,6 +3,18 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_bookmark_chapter"
+        android:icon="@drawable/ic_bookmark_24dp"
+        android:title="@string/bookmark_this_chapter"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_mark_read"
+        android:icon="@drawable/ic_eye_24dp"
+        android:title="@string/mark_as_read"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_shift_double_page"
         android:icon="@drawable/ic_page_next_outline_24dp"
         android:title="@string/shift_one_page_over"

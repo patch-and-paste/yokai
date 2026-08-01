@@ -525,6 +525,22 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        val currentChapter = viewModel.getCurrentChapter()?.chapter
+        menu.findItem(R.id.action_bookmark_chapter)?.apply {
+            isVisible = currentChapter != null
+            val bookmarked = currentChapter?.bookmark == true
+            title = getString(
+                if (bookmarked) MR.strings.remove_bookmark_from_chapter else MR.strings.bookmark_this_chapter,
+            )
+            setIcon(if (bookmarked) R.drawable.ic_bookmark_off_24dp else R.drawable.ic_bookmark_24dp)
+        }
+        menu.findItem(R.id.action_mark_read)?.apply {
+            isVisible = currentChapter != null
+            title = getString(
+                if (currentChapter?.read == true) MR.strings.mark_as_unread else MR.strings.mark_as_read,
+            )
+        }
+
         val splitItem = menu.findItem(R.id.action_shift_double_page)
         splitItem?.isVisible = ((viewer as? PagerViewer)?.config?.doublePages ?: false) && !canShowSplitAtBottom()
         binding.chaptersSheet.shiftPageButton.isVisible = ((viewer as? PagerViewer)?.config?.doublePages ?: false) && canShowSplitAtBottom()
@@ -644,6 +660,12 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
      */
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
+            R.id.action_bookmark_chapter -> toggleCurrentChapter { chapter ->
+                viewModel.toggleBookmark(chapter)
+            }
+            R.id.action_mark_read -> toggleCurrentChapter { chapter ->
+                viewModel.toggleRead(chapter)
+            }
             R.id.action_shift_double_page -> {
                 shiftDoublePages()
                 manuallyShiftedPages = true
@@ -651,6 +673,20 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
             else -> return super.onOptionsItemSelected(item)
         }
         return true
+    }
+
+    /**
+     * Applies [toggle] to the chapter being read, then refreshes the toolbar and the chapter sheet
+     * once the write has landed so both show the new state rather than the one read back early.
+     */
+    private fun toggleCurrentChapter(toggle: (Chapter) -> Job) {
+        val chapter = viewModel.getCurrentChapter()?.chapter ?: return
+        val write = toggle(chapter)
+        lifecycleScope.launch {
+            write.join()
+            invalidateOptionsMenu()
+            binding.chaptersSheet.chaptersBottomSheet.refreshList(scrollToCurrent = false)
+        }
     }
 
     fun shiftDoublePages(forceShift: Boolean? = null, page: ReaderPage? = null) {
