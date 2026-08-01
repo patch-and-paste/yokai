@@ -27,6 +27,9 @@ class TrackPreferences(
 
     fun anilistScoreType() = preferenceStore.getString("anilist_score_type", Anilist.POINT_10)
 
+    /** Keeps new AniList entries and updates off the public activity feed. */
+    fun anilistPrivateTracking() = preferenceStore.getBoolean("anilist_private_tracking", false)
+
     fun autoUpdateTrack() = preferenceStore.getBoolean("pref_auto_update_manga_sync_key", true)
 
     companion object {

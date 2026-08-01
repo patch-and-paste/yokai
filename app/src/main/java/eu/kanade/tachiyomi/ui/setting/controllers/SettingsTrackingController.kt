@@ -19,12 +19,14 @@ import eu.kanade.tachiyomi.data.track.shikimori.ShikimoriApi
 import eu.kanade.tachiyomi.source.SourceManager
 import eu.kanade.tachiyomi.ui.setting.SettingsLegacyController
 import eu.kanade.tachiyomi.ui.setting.add
+import eu.kanade.tachiyomi.ui.setting.bindTo
 import eu.kanade.tachiyomi.ui.setting.defaultValue
 import eu.kanade.tachiyomi.ui.setting.iconRes
 import eu.kanade.tachiyomi.ui.setting.infoPreference
 import eu.kanade.tachiyomi.ui.setting.onClick
 import eu.kanade.tachiyomi.ui.setting.preference
 import eu.kanade.tachiyomi.ui.setting.preferenceCategory
+import eu.kanade.tachiyomi.ui.setting.summaryMRes as summaryRes
 import eu.kanade.tachiyomi.ui.setting.switchPreference
 import eu.kanade.tachiyomi.ui.setting.titleMRes as titleRes
 import eu.kanade.tachiyomi.util.system.launchIO
@@ -67,6 +69,17 @@ class SettingsTrackingController :
             }
             trackPreference(trackManager.aniList) {
                 activity?.openInBrowser(AnilistApi.authUrl(), trackManager.aniList.getLogoColor(), true)
+            }
+            switchPreference {
+                bindTo(trackPreferences.anilistPrivateTracking())
+                titleRes = MR.strings.anilist_private_tracking
+                summaryRes = MR.strings.anilist_private_tracking_summary
+                isIconSpaceReserved = true
+
+                preferences.getStringPref(trackManager.aniList.getUsername())
+                    .changesIn(viewScope) {
+                        isVisible = it.isNotEmpty()
+                    }
             }
             preference {
                 key = "update_anilist_scoring"
