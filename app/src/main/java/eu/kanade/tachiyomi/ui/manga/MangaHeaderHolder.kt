@@ -120,10 +120,14 @@ class MangaHeaderHolder(
             }
             mangaSummary.setOnTouchListener { _, event ->
                 if (event.action == MotionEvent.ACTION_DOWN) {
-                    view.requestFocus()
+                    // Moving focus clears the selection, so record it first and leave focus alone
+                    // while there is one. Reading it on ACTION_UP instead always saw false, and
+                    // the click listener below then collapsed the description out from under the
+                    // text the user was selecting.
+                    hadSelection = mangaSummary.hasSelection()
+                    if (!hadSelection) view.requestFocus()
                 }
                 if (event.actionMasked == MotionEvent.ACTION_UP) {
-                    hadSelection = mangaSummary.hasSelection()
                     (adapter.delegate as MangaDetailsController).binding.swipeRefresh.isEnabled =
                         true
                 }
