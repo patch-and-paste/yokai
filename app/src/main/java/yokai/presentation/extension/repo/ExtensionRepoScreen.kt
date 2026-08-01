@@ -1,5 +1,8 @@
 package yokai.presentation.extension.repo
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,12 +26,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
+import androidx.core.content.getSystemService
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import dev.icerock.moko.resources.compose.stringResource
 import eu.kanade.tachiyomi.util.compose.LocalBackPress
 import eu.kanade.tachiyomi.util.compose.LocalDialogHostState
 import eu.kanade.tachiyomi.util.compose.currentOrThrow
 import eu.kanade.tachiyomi.util.isTablet
+import eu.kanade.tachiyomi.util.system.openInBrowser
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -43,6 +48,7 @@ import yokai.presentation.core.enterAlwaysAppBarScrollBehavior
 import yokai.presentation.extension.repo.component.ExtensionRepoInput
 import yokai.presentation.extension.repo.component.ExtensionRepoItem
 import yokai.util.Screen
+import yokai.util.lang.getString
 import android.R as AR
 
 class ExtensionRepoScreen(
@@ -117,6 +123,15 @@ class ExtensionRepoScreen(
                             extensionRepo = repo,
                             onDeleteClick = { repoToDelete ->
                                 scope.launch { alertDialog.awaitExtensionRepoDeletePrompt(repoToDelete, screenModel) }
+                            },
+                            onOpenClick = { url -> context.openInBrowser(url) },
+                            onLongClick = { url ->
+                                val clipboard = context.getSystemService<ClipboardManager>()!!
+                                clipboard.setPrimaryClip(ClipData.newPlainText(title, url))
+                                // Android 13 and up shows its own copy confirmation
+                                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                                    context.toast(context.getString(MR.strings._copied_to_clipboard, url))
+                                }
                             },
                         )
                     }

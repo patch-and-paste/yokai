@@ -2,6 +2,7 @@ package yokai.presentation.extension.repo.component
 
 import android.content.res.Configuration
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,8 +32,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.icerock.moko.resources.compose.stringResource
 import eu.kanade.tachiyomi.util.compose.textHint
 import yokai.domain.extension.repo.model.ExtensionRepo
+import yokai.i18n.MR
 import yokai.presentation.component.Gap
 import yokai.presentation.theme.Size
 
@@ -42,9 +46,16 @@ fun ExtensionRepoItem(
     modifier: Modifier = Modifier,
     extensionRepo: ExtensionRepo,
     onDeleteClick: (String) -> Unit = {},
+    onOpenClick: (String) -> Unit = {},
+    onLongClick: (String) -> Unit = {},
 ) {
     Row(
-        modifier = modifier.padding(16.dp),
+        modifier = modifier
+            .combinedClickable(
+                onClick = { onOpenClick(extensionRepo.baseUrl) },
+                onLongClick = { onLongClick(extensionRepo.baseUrl) },
+            )
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -74,10 +85,17 @@ fun ExtensionRepoItem(
                 fontSize = 16.sp,
             )
         }
+        IconButton(onClick = { onOpenClick(extensionRepo.baseUrl) }) {
+            Icon(
+                imageVector = Icons.Outlined.Public,
+                contentDescription = stringResource(MR.strings.open_in_browser),
+                tint = MaterialTheme.colorScheme.onBackground,
+            )
+        }
         IconButton(onClick = { onDeleteClick(extensionRepo.baseUrl) }) {
             Icon(
                 imageVector = Icons.Filled.Delete,
-                contentDescription = null,
+                contentDescription = stringResource(MR.strings.delete),
                 tint = MaterialTheme.colorScheme.onBackground,
             )
         }
