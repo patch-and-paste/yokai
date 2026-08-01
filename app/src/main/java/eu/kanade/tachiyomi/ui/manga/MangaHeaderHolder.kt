@@ -525,7 +525,23 @@ class MangaHeaderHolder(
             )
             val colorStateList = ColorStateList(states, colors)
             if (manga.genre.isNullOrBlank().not()) {
-                (manga.getGenres() ?: emptyList()).map { genreText ->
+                groupByNamespace(manga.getGenres() ?: emptyList()).forEach { (namespace, tags) ->
+                  if (namespace != null) {
+                    val label = LayoutInflater.from(binding.root.context).inflate(
+                        R.layout.genre_chip,
+                        this,
+                        false,
+                    ) as Chip
+                    label.id = View.generateViewId()
+                    label.chipBackgroundColor = colorStateList
+                    label.setTextColor(textColor)
+                    label.text = namespace
+                    label.isClickable = false
+                    label.typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    this.addView(label)
+                  }
+                  tags.forEach { fullTag ->
+                    val genreText = fullTag.substringAfter(':', fullTag).trim()
                     val chip = LayoutInflater.from(binding.root.context).inflate(
                         R.layout.genre_chip,
                         this,
@@ -537,16 +553,34 @@ class MangaHeaderHolder(
                     chip.setTextColor(textColor)
                     chip.text = genreText
                     chip.setOnClickListener {
-                        adapter.delegate.showFloatingActionMode(chip, isTag = true)
+                        // The namespace belongs in the query even though the chip drops it
+                        adapter.delegate.showFloatingActionMode(chip, content = fullTag, isTag = true)
                     }
                     chip.setOnLongClickListener {
-                        adapter.delegate.copyContentToClipboard(genreText, genreText)
+                        adapter.delegate.copyContentToClipboard(fullTag, fullTag)
                         true
                     }
                     this.addView(chip)
+                  }
                 }
             }
         }
+    }
+
+    /**
+     * Splits `namespace:tag` pairs out of a flat genre list, as e-hentai and MangaDex publish
+     * them, and keeps plain tags together at the front. Sources that use no namespace come back
+     * as a single unnamed group, which renders exactly as before.
+     */
+    private fun groupByNamespace(genres: List<String>): List<Pair<String?, List<String>>> {
+        val (namespaced, plain) = genres.partition { it.substringBefore(':', "").isNotBlank() }
+        if (namespaced.isEmpty()) return listOf(null to plain)
+
+        val grouped = namespaced
+            .groupBy { it.substringBefore(':').trim() }
+            .toList()
+            .sortedBy { it.first.lowercase() }
+        return if (plain.isEmpty()) grouped else listOf(null to plain) + grouped
     }
 
     fun clearDescFocus() {
