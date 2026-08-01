@@ -321,7 +321,11 @@ class MangaHeaderHolder(
         if (manga.hasSameAuthorAndArtist) {
             binding.mangaAuthor.text = manga.author?.trim()
         } else {
-            binding.mangaAuthor.text = listOfNotNull(manga.author?.trim(), manga.artist?.trim()).joinToString(", ")
+            // Some sources send an absent creator as an empty string rather than null, which would
+            // otherwise render as ", Artist"
+            binding.mangaAuthor.text = listOfNotNull(manga.author?.trim(), manga.artist?.trim())
+                .filter { it.isNotBlank() }
+                .joinToString(", ")
         }
         setDescription()
 
