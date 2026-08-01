@@ -1457,7 +1457,9 @@ class MangaDetailsController :
                 return
             }
             R.id.download_unread -> presenter.chapters.filter { !it.read }
-            R.id.download_all -> presenter.allChapters
+            // Honours the scanlator filter: downloading every duplicate from every group is
+            // what the filter was set to avoid
+            R.id.download_all -> presenter.chaptersFromEnabledScanlators
             else -> emptyList()
         }
         if (chaptersToDownload.isNotEmpty()) {

@@ -159,6 +159,12 @@ class MangaDetailsPresenter(
         private set
 
     var allChapters: List<ChapterItem> = emptyList()
+
+    /**
+     * Every chapter from the scanlators the reader kept, before the read and downloaded filters
+     * that only affect what the list shows.
+     */
+    var chaptersFromEnabledScanlators: List<ChapterItem> = emptyList()
         private set
 
     var allHistory: List<History> = emptyList()
@@ -281,6 +287,7 @@ class MangaDetailsPresenter(
         setDownloadedChapters(chapters, queue)
         allChapterScanlators = allChapters.mapNotNull { it.chapter.scanlator }.toSet()
 
+        chaptersFromEnabledScanlators = chapters
         this.chapters = applyChapterFilters(chapters)
     }
 
