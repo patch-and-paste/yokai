@@ -493,6 +493,7 @@
     <string name="portrait">Portrait</string>
     <string name="landscape">Landscape</string>
     <string name="locked_portrait">Locked portrait</string>
+    <string name="reverse_portrait">Reverse portrait</string>
     <string name="locked_landscape">Locked landscape</string>
     <string name="red_initial">R</string>
     <string name="green_initial">G</string>
