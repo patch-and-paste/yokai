@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.data.track.anilist.Anilist
 import eu.kanade.tachiyomi.data.track.bangumi.Bangumi
 import eu.kanade.tachiyomi.data.track.kavita.Kavita
 import eu.kanade.tachiyomi.data.track.kitsu.Kitsu
+import eu.kanade.tachiyomi.data.track.mangabaka.Mangabaka
 import eu.kanade.tachiyomi.data.track.komga.Komga
 import eu.kanade.tachiyomi.data.track.mangaupdates.MangaUpdates
 import eu.kanade.tachiyomi.data.track.myanimelist.MyAnimeList
@@ -23,6 +24,7 @@ class TrackManager(context: Context) {
         const val MANGA_UPDATES = 7L
         const val KAVITA = 8L
         const val SUWAYOMI = 9L
+        const val MANGABAKA = 10L
     }
 
     val myAnimeList = MyAnimeList(context, MYANIMELIST)
@@ -34,8 +36,9 @@ class TrackManager(context: Context) {
     val mangaUpdates = MangaUpdates(context, MANGA_UPDATES)
     val kavita = Kavita(context, KAVITA)
     val suwayomi = Suwayomi(context, SUWAYOMI)
+    val mangabaka = Mangabaka(context, MANGABAKA)
 
-    val services = listOf(myAnimeList, aniList, kitsu, shikimori, bangumi, komga, mangaUpdates, kavita, suwayomi)
+    val services = listOf(myAnimeList, aniList, kitsu, shikimori, bangumi, komga, mangaUpdates, kavita, suwayomi, mangabaka)
 
     fun getService(id: Long) = services.find { it.id == id }
 
