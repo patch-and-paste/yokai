@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.util.system.isOnline
 import eu.kanade.tachiyomi.util.system.launchIO
 import eu.kanade.tachiyomi.util.system.w
 import eu.kanade.tachiyomi.util.system.withIOContext
+import java.util.Date
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import uy.kohesive.injekt.Injekt
@@ -110,6 +111,7 @@ suspend fun updateTrackChapterRead(
             } else if (preferences.context.isOnline()) {
                 try {
                     track.last_chapter_read = newChapterRead
+                    stampReadingDates(track)
                     service.update(track, true)
                     insertTrack.await(track)
                 } catch (e: Exception) {
@@ -123,6 +125,22 @@ suspend fun updateTrackChapterRead(
         }
     }
     return failures
+}
+
+/**
+ * Fills in the reading dates the trackers already accept but nothing was setting. Existing values
+ * are left alone: a date the reader entered, or one the service sent back, outranks a guess made
+ * from local progress.
+ */
+private fun stampReadingDates(track: Track) {
+    val now = Date().time
+    if (track.started_reading_date <= 0L) {
+        track.started_reading_date = now
+    }
+    val isFinished = track.total_chapters > 0 && track.last_chapter_read >= track.total_chapters
+    if (isFinished && track.finished_reading_date <= 0L) {
+        track.finished_reading_date = now
+    }
 }
 
 private fun delayTrackingUpdate(
