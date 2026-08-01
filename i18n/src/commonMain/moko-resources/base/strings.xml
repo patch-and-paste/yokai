@@ -74,6 +74,7 @@
     <string name="page_x_of_y">Page %1$d of %2$d</string>
     <string name="all_chapters_read">All chapters read</string>
     <string name="bookmarked">Bookmarked</string>
+    <string name="rotate_wide_pages">Rotate wide pages to fit</string>
     <string name="not_bookmarked">Not bookmarked</string>
     <string name="marked_as_read">Marked as read</string>
     <string name="marked_as_unread">Marked as unread</string>

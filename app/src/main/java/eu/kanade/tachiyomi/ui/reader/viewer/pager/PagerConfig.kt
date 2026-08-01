@@ -46,6 +46,8 @@ class PagerConfig(
         private set
 
     var landscapeZoom = false
+
+    var rotateWidePages = false
         private set
 
     var readerTheme = 0
@@ -116,6 +118,9 @@ class PagerConfig(
 
         preferences.landscapeZoom()
             .register({ landscapeZoom = it }, { imagePropertyChangedListener?.invoke() })
+
+        preferences.rotateWidePages()
+            .register({ rotateWidePages = it }, { imagePropertyChangedListener?.invoke() })
 
         preferences.readerTheme()
             .register({ readerTheme = it }, { imagePropertyChangedListener?.invoke() })

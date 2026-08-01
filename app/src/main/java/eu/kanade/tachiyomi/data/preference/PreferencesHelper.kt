@@ -114,6 +114,8 @@ class PreferencesHelper(val context: Context, val preferenceStore: PreferenceSto
 
     fun landscapeZoom() = preferenceStore.getBoolean("landscape_zoom", false)
 
+    fun rotateWidePages() = preferenceStore.getBoolean("rotate_wide_pages", false)
+
     fun grayscale() = preferenceStore.getBoolean("pref_grayscale", false)
 
     fun invertedColors() = preferenceStore.getBoolean("pref_inverted_colors", false)

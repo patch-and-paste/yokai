@@ -28,6 +28,7 @@ import coil3.request.crossfade
 import coil3.size.Precision
 import coil3.size.ViewSizeResolver
 import com.davemorrissey.labs.subscaleview.ImageSource
+import com.davemorrissey.labs.subscaleview.ImageRotation
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE
 import com.github.chrisbanes.photoview.PhotoView
@@ -214,6 +215,11 @@ open class ReaderPageImageView @JvmOverloads constructor(
         setOnImageEventListener(
             object : SubsamplingScaleImageView.DefaultOnImageEventListener() {
                 override fun onReady() {
+                    // A spread is wider than it is tall, so turning it a quarter lets it fill a
+                    // portrait screen instead of shrinking to a band across the middle
+                    if (config.rotateWidePages && sWidth > sHeight) {
+                        setImageRotation(ImageRotation.ROTATION_90)
+                    }
                     // 5x zoom
                     setupZoom(config)
                     this@ReaderPageImageView.onNeedsLandscapeZoom()
@@ -349,6 +355,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         val cropBorders: Boolean = false,
         val zoomStartPosition: PagerConfig.ZoomType = PagerConfig.ZoomType.Center,
         val landscapeZoom: Boolean = false,
+        val rotateWidePages: Boolean = false,
         val insetInfo: InsetInfo? = null,
         val hingeGapSize: Int = 0,
         val debugMode: Boolean = false,

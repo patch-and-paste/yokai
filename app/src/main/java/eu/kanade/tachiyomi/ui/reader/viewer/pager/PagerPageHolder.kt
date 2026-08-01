@@ -518,6 +518,7 @@ class PagerPageHolder(
             cropBorders = viewer.config.imageCropBorders,
             zoomStartPosition = viewer.config.imageZoomType,
             landscapeZoom = viewer.config.landscapeZoom,
+            rotateWidePages = viewer.config.rotateWidePages,
             insetInfo = InsetInfo(
                 cutoutSupport = DeviceUtil.hasCutout(viewer.activity),
                 cutoutBehavior = viewer.config.cutoutBehavior,

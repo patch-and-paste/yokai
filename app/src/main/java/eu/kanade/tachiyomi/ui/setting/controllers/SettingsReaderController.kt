@@ -261,6 +261,10 @@ class SettingsReaderController : SettingsLegacyController() {
                 titleRes = MR.strings.zoom_double_page_spreads
                 visibleIf(preferences.imageScaleType()) { it == 1 }
             }
+            switchPreference {
+                bindTo(preferences.rotateWidePages())
+                titleRes = MR.strings.rotate_wide_pages
+            }
             intListPreference(activity) {
                 key = Keys.zoomStart
                 titleRes = MR.strings.zoom_start_position
