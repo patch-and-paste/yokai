@@ -824,7 +824,7 @@ class ReaderViewModel(
 
         // Build destination file.
         val filename = DiskUtil.buildValidFilename(
-            "${manga.title} - ${chapter.preferredChapterName(context, manga, preferences)}".take(225),
+            DiskUtil.takeWholeChars("${manga.title} - ${chapter.preferredChapterName(context, manga, preferences)}", 225),
         ) + (if (downloadPreferences.downloadWithId().get()) " (${chapter.id})" else "") + " - ${page.number}.${type.extension}"
 
         val destFile = directory.createFile(filename)!!
@@ -857,7 +857,7 @@ class ReaderViewModel(
 
         // Build destination file.
         val filename = DiskUtil.buildValidFilename(
-            "${manga.title} - ${chapter.preferredChapterName(context, manga, preferences)}".take(225),
+            DiskUtil.takeWholeChars("${manga.title} - ${chapter.preferredChapterName(context, manga, preferences)}", 225),
         ) + (if (downloadPreferences.downloadWithId().get()) " (${chapter.id})" else "") + " - ${page1.number}-${page2.number}.jpg"
 
         val destFile = directory.createFile(filename)!!

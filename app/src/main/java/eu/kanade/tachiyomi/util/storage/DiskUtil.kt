@@ -140,7 +140,19 @@ object DiskUtil {
         }
         // Even though vfat allows 255 UCS-2 chars, we might eventually write to
         // ext4 through a FUSE layer, so use that limit minus 15 reserved characters.
-        return sb.toString().take(240)
+        return takeWholeChars(sb.toString(), 240)
+    }
+
+    /**
+     * Takes at most [max] UTF-16 units of [name] without cutting a surrogate pair in half.
+     *
+     * A plain `take` counts units, so a cut that lands inside an emoji leaves a lone surrogate
+     * behind, which some filesystems and SAF providers reject outright.
+     */
+    fun takeWholeChars(name: String, max: Int): String {
+        if (name.length <= max) return name
+        val end = if (name[max - 1].isHighSurrogate()) max - 1 else max
+        return name.substring(0, end)
     }
 
     /**
