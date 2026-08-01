@@ -991,6 +991,8 @@
     <string name="visit_recents_for_download_queue">Visit the recents tab to access the download
         queue. You can also double tap or press and hold for quicker access</string>
     <string name="couldnt_download_low_space">Couldn\'t download chapters due to low disk space</string>
+    <string name="download_paused_low_space">Downloads paused, running low on storage</string>
+    <string name="pause_downloads_low_space">Pause downloads when storage is low</string>
     <string name="download_notifier_split_page_not_found">Page %d not found while splitting</string>
     <string name="download_notifier_split_failed">Couldn\'t split downloaded image</string>
     <string name="download_with_id">Auto-append ID</string>

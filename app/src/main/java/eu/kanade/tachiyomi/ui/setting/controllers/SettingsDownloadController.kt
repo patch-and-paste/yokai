@@ -54,6 +54,19 @@ class SettingsDownloadController : SettingsLegacyController() {
             title = context.getString(MR.strings.download_with_id).addBetaTag(context)
             summaryRes = MR.strings.download_with_id_details
         }
+        intListPreference(activity) {
+            bindTo(downloadPreferences.pauseBelowFreeSpaceMb())
+            titleRes = MR.strings.pause_downloads_low_space
+            entryValues = listOf(0, 500, 1024, 2048, 5120)
+            entries = listOf(
+                context.getString(MR.strings.disabled),
+                "500 MB",
+                "1 GB",
+                "2 GB",
+                "5 GB",
+            )
+            defaultValue = 0
+        }
 
         // FIXME: Don't do blocking
         val dbCategories = runBlocking { getCategories.await() }
