@@ -324,9 +324,6 @@ class TrackingBottomSheet(private val controller: MangaDetailsController) :
         } else {
             setMiddleTrackView(binding.trackSearchRecycler.id)
             binding.searchEmptyView.hide()
-            if (results.size == 1 && searchingItem?.track == null) {
-                trackItem(0)
-            }
         }
         binding.trackSearchRecycler.isVisible = !binding.searchEmptyView.isVisible
     }
