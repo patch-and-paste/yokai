@@ -945,11 +945,15 @@ class ReaderViewModel(
         val manga = manga ?: return
         val context = Injekt.get<Application>()
 
-        val destDir = UniFile.fromFile(context.cacheDir)!!.createDirectory("shared_image")!!
+        val destDir = UniFile.fromFile(context.cacheDir)?.createDirectory("shared_image") ?: return
 
         viewModelScope.launchNonCancellableIO {
-            val file = saveImage(page, destDir, manga)
-            eventChannel.send(Event.ShareImage(file, page))
+            try {
+                val file = saveImage(page, destDir, manga)
+                eventChannel.send(Event.ShareImage(file, page))
+            } catch (e: Exception) {
+                Logger.e(e) { "Unable to prepare page for sharing" }
+            }
         }
     }
 
@@ -961,10 +965,12 @@ class ReaderViewModel(
             val context = Injekt.get<Application>()
 
             try {
-                val destDir = UniFile.fromFile(context.cacheDir)!!.findFile("shared_image")!!
+                val destDir = UniFile.fromFile(context.cacheDir)?.createDirectory("shared_image")
+                    ?: return@launch
                 val file = saveImages(firstPage, secondPage, isLTR, bg, destDir, manga)
                 eventChannel.send(Event.ShareImage(file, firstPage, secondPage))
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Logger.e(e) { "Unable to prepare pages for sharing" }
             }
         }
     }
