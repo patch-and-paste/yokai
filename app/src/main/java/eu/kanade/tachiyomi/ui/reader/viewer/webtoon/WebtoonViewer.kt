@@ -272,14 +272,26 @@ class WebtoonViewer(val activity: ReaderActivity, val hasMargins: Boolean = fals
      * Scrolls up by [scrollDistance].
      */
     override fun moveToPrevious() {
-        recycler.smoothScrollBy(0, -scrollDistance)
+        scrollVertically(-scrollDistance)
     }
 
     /**
      * Scrolls down by [scrollDistance].
      */
     override fun moveToNext() {
-        recycler.smoothScrollBy(0, scrollDistance)
+        scrollVertically(scrollDistance)
+    }
+
+    /**
+     * The animation here is what "Animate page transitions" turns off. An e-ink panel refreshes
+     * several times over the course of a smooth scroll and ghosts the frames in between.
+     */
+    private fun scrollVertically(distance: Int) {
+        if (config.usePageTransitions) {
+            recycler.smoothScrollBy(0, distance)
+        } else {
+            recycler.scrollBy(0, distance)
+        }
     }
 
     /**

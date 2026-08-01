@@ -27,6 +27,9 @@ class WebtoonConfig(
     readerPreferences: ReaderPreferences = Injekt.get(),
 ) : ViewerConfig(preferences, scope) {
 
+    var usePageTransitions = false
+        private set
+
     var webtoonCropBorders = false
         private set
 
@@ -56,6 +59,8 @@ class WebtoonConfig(
         private set
 
     init {
+        preferences.pageTransitions().register({ usePageTransitions = it })
+
         preferences.navigationModeWebtoon()
             .register({ navigationMode = it }, { updateNavigation(it) })
 
