@@ -423,16 +423,20 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
             if (fetchedChapters.isNotEmpty()) {
                 val newChapters = syncChaptersWithSource(fetchedChapters, manga.manga, source)
-                if (newChapters.first.isNotEmpty()) {
+                // A chapter the source re-released under a new url comes back already read when
+                // "mark duplicate read chapters as read" is on. Downloading it again and listing
+                // it as an update would undo the point of that setting.
+                val unreadNewChapters = newChapters.first.filterNot { it.read }
+                if (unreadNewChapters.isNotEmpty()) {
                     if (shouldDownload) {
                         downloadChapters(
                             manga.manga,
-                            newChapters.first.sortedBy { it.chapter_number },
+                            unreadNewChapters.sortedBy { it.chapter_number },
                         )
                         hasDownloads = true
                     }
                     newUpdates[manga] =
-                        newChapters.first.sortedBy { it.chapter_number }.toTypedArray()
+                        unreadNewChapters.sortedBy { it.chapter_number }.toTypedArray()
                 }
                 if (deleteRemoved && newChapters.second.isNotEmpty()) {
                     val removedChapters = newChapters.second.filter {
