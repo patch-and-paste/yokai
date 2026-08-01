@@ -605,6 +605,7 @@
     <string name="app_settings">App settings</string>
     <string name="source_settings">Source settings</string>
     <string name="custom_manga_info">Custom series info</string>
+    <string name="custom_covers">Custom covers</string>
     <string name="all_read_manga">All read series</string>
     <string name="set_as_default">Set as default</string>
     <string name="filter_groups">Filter scanlator groups</string>

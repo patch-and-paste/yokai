@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupTracking
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.library.CustomMangaManager
 import eu.kanade.tachiyomi.domain.manga.models.Manga
 import uy.kohesive.injekt.Injekt
@@ -22,6 +23,7 @@ class MangaBackupCreator(
     private val getChapter: GetChapter = Injekt.get(),
     private val getHistory: GetHistory = Injekt.get(),
     private val getTrack: GetTrack = Injekt.get(),
+    private val coverCache: CoverCache = Injekt.get(),
 ) {
     suspend operator fun invoke(mangas: List<Manga>, options: BackupOptions): List<BackupManga> {
         return mangas.map {
@@ -39,6 +41,12 @@ class MangaBackupCreator(
     private suspend fun backupManga(manga: Manga, options: BackupOptions): BackupManga {
         // Entry for this manga
         val mangaObject = BackupManga.copyFrom(manga, if (options.customInfo) customMangaManager else null)
+
+        if (options.customCovers) {
+            // Read straight off disk: these are user-set images that no source can hand back
+            coverCache.getCustomCoverFile(manga).takeIf { it.exists() }
+                ?.let { mangaObject.customCover = it.readBytes() }
+        }
 
         // Check if user wants chapter information in backup
         if (options.chapters) {

@@ -2,7 +2,9 @@ package eu.kanade.tachiyomi.data.backup.restore.restorers
 
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
+import co.touchlab.kermit.Logger
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.database.models.Chapter
 import eu.kanade.tachiyomi.data.database.models.History
 import eu.kanade.tachiyomi.data.database.models.MangaCategory
@@ -45,6 +47,7 @@ class MangaBackupRestorer(
     private val upsertHistory: UpsertHistory = Injekt.get(),
     private val getTrack: GetTrack = Injekt.get(),
     private val insertTrack: InsertTrack = Injekt.get(),
+    private val coverCache: CoverCache = Injekt.get(),
 ) {
     suspend fun restoreManga(
         backupManga: BackupManga,
@@ -80,11 +83,29 @@ class MangaBackupRestorer(
                     restoreExistingManga(manga, chapters, categories, history, tracks, backupCategories, filteredScanlators, customManga)
                 }
             }
+            restoreCustomCover(manga, backupManga)
         } catch (e: Exception) {
             onError(manga, e)
         }
 
         onComplete(manga)
+    }
+
+    /**
+     * Writes back a cover the reader had set by hand. Kept out of the database transaction
+     * because it touches the disk, and skipped when the entry already has one so a restore does
+     * not overwrite a newer choice.
+     */
+    private fun restoreCustomCover(manga: Manga, backupManga: BackupManga) {
+        val bytes = backupManga.customCover ?: return
+        if (bytes.isEmpty() || manga.id == null) return
+        if (coverCache.getCustomCoverFile(manga).exists()) return
+
+        try {
+            coverCache.setCustomCoverToCache(manga, bytes.inputStream())
+        } catch (e: Exception) {
+            Logger.e(e) { "Unable to restore the custom cover for ${manga.title}" }
+        }
     }
 
     /**

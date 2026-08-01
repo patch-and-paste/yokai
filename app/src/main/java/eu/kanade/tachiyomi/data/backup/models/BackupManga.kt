@@ -59,6 +59,9 @@ data class BackupManga(
     // skipping 803 due to using duplicate value in previous builds
     @ProtoNumber(804) var customDescription: String? = null,
     @ProtoNumber(805) var customGenre: List<String>? = null,
+
+    // Yokai keeps its own additions in the 8xx range so upstream field numbers stay free
+    @ProtoNumber(806) var customCover: ByteArray? = null,
 ) {
     fun getMangaImpl(): MangaImpl {
         return MangaImpl(
