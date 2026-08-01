@@ -309,6 +309,7 @@
     <string name="local_source">Local source</string>
     <string name="other">Other</string>
     <string name="global_search">Global search…</string>
+    <string name="search_all_sources">Search all sources</string>
     <string name="label_global_search">Global search</string>
     <string name="latest">Latest</string>
     <string name="popular">Popular</string>

@@ -55,7 +55,18 @@ open class GlobalSearchPresenter(
     /**
      * Enabled sources.
      */
-    val sources by lazy { getSourcesToQuery() }
+    private var sourcesToQuery: List<CatalogueSource>? = null
+
+    val sources: List<CatalogueSource>
+        get() = sourcesToQuery ?: getSourcesToQuery().also { sourcesToQuery = it }
+
+    /** Set once the user has asked for the unpinned sources as well. */
+    var searchingAllSources = false
+        private set
+
+    /** True while the pinned-only setting is still narrowing the search. */
+    val canSearchAllSources: Boolean
+        get() = preferences.onlySearchPinned().get() && !searchingAllSources
 
     private var fetchSourcesJob: Job? = null
 
@@ -104,7 +115,7 @@ open class GlobalSearchPresenter(
             .filterNot { it.id.toString() in hiddenCatalogues }
             .sortedBy { "(${it.lang}) ${it.name}" }
 
-        return if (preferences.onlySearchPinned().get()) {
+        return if (preferences.onlySearchPinned().get() && !searchingAllSources) {
             list.filter { it.id.toString() in pinnedCatalogues }
         } else {
             list.sortedBy { it.id.toString() !in pinnedCatalogues }
@@ -157,6 +168,20 @@ open class GlobalSearchPresenter(
      *
      * @param query query on which to search.
      */
+    /**
+     * Repeats the current query across every enabled source, for when "only search pinned
+     * sources" hid the one the reader was after.
+     */
+    fun searchAllSources() {
+        if (searchingAllSources) return
+        searchingAllSources = true
+        sourcesToQuery = null
+
+        val currentQuery = query
+        query = ""
+        search(currentQuery)
+    }
+
     fun search(query: String) {
         // Return if there's nothing to do
         if (this.query == query) return

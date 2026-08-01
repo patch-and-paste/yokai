@@ -204,6 +204,22 @@ open class GlobalSearchController(
         }
     }
 
+    override fun onPrepareOptionsMenu(menu: Menu) {
+        // Only worth offering while the pinned-only setting is actually hiding sources
+        menu.findItem(R.id.action_search_all_sources)?.isVisible =
+presenter.canSearchAllSources
+        super.onPrepareOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == R.id.action_search_all_sources) {
+            presenter.searchAllSources()
+            activity?.invalidateOptionsMenu()
+            return true
+        }
+        return super.onOptionsItemSelected(item)
+    }
+
     override fun onChangeStarted(handler: ControllerChangeHandler, type: ControllerChangeType) {
         super.onChangeStarted(handler, type)
         if (type.isEnter && isControllerVisible) {

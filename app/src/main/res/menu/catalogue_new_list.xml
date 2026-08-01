@@ -8,4 +8,9 @@
         android:icon="@drawable/ic_search_24dp"
         app:showAsAction="collapseActionView|ifRoom"
         app:actionViewClass="eu.kanade.tachiyomi.ui.base.MiniSearchView"/>
+
+    <item
+        android:id="@+id/action_search_all_sources"
+        android:title="@string/search_all_sources"
+        app:showAsAction="never" />
 </menu>
