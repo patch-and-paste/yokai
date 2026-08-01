@@ -476,7 +476,7 @@ class LibraryPresenter(
                 item.downloadCount != -1 -> item.downloadCount > 0
                 else -> downloadManager.getDownloadCount(item.manga.manga) > 0
             }
-            return if (filterPrefs.filterDownloaded == STATE_INCLUDE) isDownloaded else !isDownloaded
+            if (isDownloaded != (filterPrefs.filterDownloaded == STATE_INCLUDE)) return false
         }
 
         // Filter for NSFW/SFW contents
