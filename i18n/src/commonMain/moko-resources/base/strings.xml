@@ -780,6 +780,9 @@
     <!-- Storage -->
     <string name="data_and_storage">Data and storage</string>
     <string name="storage_location">Storage location</string>
+    <string name="backups_location">Backups location</string>
+    <string name="saved_pages_location">Saved pages location</string>
+    <string name="same_as_storage_location">Same as storage location</string>
     <string name="storage_usage">Storage usage</string>
     <string name="available_disk_space_info">Available: %1$s / Total: %2$s</string>
 

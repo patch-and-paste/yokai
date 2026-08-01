@@ -26,6 +26,9 @@ class StorageManager(
 
     private var baseDir: UniFile? = getBaseDir(storagePreferences.baseStorageDirectory().get())
 
+    private val backupsOverride = storagePreferences.backupsDirectory()
+    private val pagesOverride = storagePreferences.pagesDirectory()
+
     private val _changes: Channel<Unit> = Channel(Channel.UNLIMITED)
     val changes = _changes.receiveAsFlow()
         .shareIn(scope, SharingStarted.Lazily, 1)
@@ -67,11 +70,11 @@ class StorageManager(
     }
 
     fun getBackupsDirectory(): UniFile? {
-        return baseDir?.createDirectory(BACKUPS_PATH)
+        return backupsRoot()?.createDirectory(BACKUPS_PATH)
     }
 
     fun getAutomaticBackupsDirectory(): UniFile? {
-        return baseDir?.createDirectory(AUTOMATIC_BACKUPS_PATH)
+        return backupsRoot()?.createDirectory(AUTOMATIC_BACKUPS_PATH)
     }
 
     fun getDownloadsDirectory(): UniFile? {
@@ -86,9 +89,18 @@ class StorageManager(
         return baseDir?.createDirectory(COVERS_PATH)
     }
 
+    /**
+     * The chosen folder is written into directly, so saved pages land where the reader pointed
+     * rather than inside a generic "pages" folder their gallery cannot place.
+     */
     fun getPagesDirectory(): UniFile? {
-        return baseDir?.createDirectory(PAGES_PATH)
+        return overrideDir(pagesOverride.get()) ?: baseDir?.createDirectory(PAGES_PATH)
     }
+
+    private fun backupsRoot(): UniFile? = overrideDir(backupsOverride.get()) ?: baseDir
+
+    private fun overrideDir(uri: String): UniFile? =
+        uri.takeIf { it.isNotBlank() }?.let { getBaseDir(it) }
 
     fun getLogsDirectory(): UniFile? {
         return baseDir?.createDirectory(LOGS_PATH)

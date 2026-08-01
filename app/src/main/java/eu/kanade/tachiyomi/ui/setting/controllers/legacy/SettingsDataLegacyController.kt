@@ -70,6 +70,14 @@ class SettingsDataLegacyController : SettingsLegacyController() {
     private val coverCache: CoverCache by injectLazy()
     private val chapterCache: ChapterCache by injectLazy()
 
+    /** Blank means the folder still lives under the main storage location. */
+    private fun folderSummary(uri: String): String = when {
+        uri.isBlank() -> activity?.getString(MR.strings.same_as_storage_location).orEmpty()
+        else -> UniFile.fromUri(activity, uri.toUri())?.let { dir ->
+            dir.filePath ?: activity?.getString(MR.strings.invalid_location, dir.uri).orEmpty()
+        } ?: activity?.getString(MR.strings.invalid_location_generic).orEmpty()
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) = screen.apply {
         titleRes = MR.strings.data_and_storage
 
@@ -93,6 +101,42 @@ class SettingsDataLegacyController : SettingsLegacyController() {
                         dir.filePath ?: context.getString(MR.strings.invalid_location, dir.uri)
                     } ?: context.getString(MR.strings.invalid_location_generic)
                 }
+                .launchIn(viewScope)
+        }
+
+        preference {
+            key = "pref_backups_location"
+            bindTo(storagePreferences.backupsDirectory())
+            titleRes = MR.strings.backups_location
+
+            onClick {
+                try {
+                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), CODE_BACKUPS_DIR)
+                } catch (e: ActivityNotFoundException) {
+                    activity?.toast(MR.strings.file_picker_error)
+                }
+            }
+
+            storagePreferences.backupsDirectory().changes()
+                .onEach { summary = folderSummary(it) }
+                .launchIn(viewScope)
+        }
+
+        preference {
+            key = "pref_pages_location"
+            bindTo(storagePreferences.pagesDirectory())
+            titleRes = MR.strings.saved_pages_location
+
+            onClick {
+                try {
+                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), CODE_PAGES_DIR)
+                } catch (e: ActivityNotFoundException) {
+                    activity?.toast(MR.strings.file_picker_error)
+                }
+            }
+
+            storagePreferences.pagesDirectory().changes()
+                .onEach { summary = folderSummary(it) }
                 .launchIn(viewScope)
         }
 
@@ -252,6 +296,19 @@ class SettingsDataLegacyController : SettingsLegacyController() {
                     storagePreferences.baseStorageDirectory().set(file.uri.toString())
                 }
 
+                CODE_BACKUPS_DIR, CODE_PAGES_DIR -> {
+                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+
+                    activity.tryTakePersistableUriPermission(uri, flags)
+                    val file = UniFile.fromUri(activity, uri)!!
+                    if (requestCode == CODE_BACKUPS_DIR) {
+                        storagePreferences.backupsDirectory().set(file.uri.toString())
+                    } else {
+                        storagePreferences.pagesDirectory().set(file.uri.toString())
+                    }
+                }
+
                 CODE_BACKUP_CREATE -> {
                     doBackup(backupFlags, uri, true)
                 }
@@ -407,5 +464,7 @@ class SettingsDataLegacyController : SettingsLegacyController() {
 private const val CLEAR_CACHE_KEY = "pref_clear_cache_key"
 
 private const val CODE_DATA_DIR = 104
+private const val CODE_BACKUPS_DIR = 106
+private const val CODE_PAGES_DIR = 107
 private const val CODE_BACKUP_CREATE = 504
 private const val CODE_BACKUP_RESTORE = 505
