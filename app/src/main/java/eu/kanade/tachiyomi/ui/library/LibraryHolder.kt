@@ -48,8 +48,9 @@ abstract class LibraryHolder(
                 else -> -2
             },
             when {
+                // Checked before the download count, which the download badge setting zeroes out
+                item.manga.manga.isLocal() -> if (item.showLocalBadge) -2 else -1
                 item.downloadCount == -1 -> -1
-                item.manga.manga.isLocal() -> -2
                 else -> item.downloadCount
             },
             showTotal,

@@ -33,6 +33,9 @@ abstract class LibraryItem(
     val hideReadingButton: Boolean
         get() = preferences.hideStartReadingButton().get()
 
+    val showLocalBadge: Boolean
+        get() = preferences.localBadge().get()
+
     @CallSuper
     override fun bindViewHolder(
         adapter: FlexibleAdapter<IFlexible<RecyclerView.ViewHolder>>,
