@@ -184,9 +184,7 @@ class RecentsController(bundle: Bundle? = null) :
             (activity as? MainActivity)?.splashState?.ready = true
         }
         adapter.isSwipeEnabled = true
-        adapter.itemTouchHelperCallback.setSwipeFlags(
-            if (view.resources.isLTR) ItemTouchHelper.LEFT else ItemTouchHelper.RIGHT,
-        )
+        adapter.itemTouchHelperCallback.setSwipeFlags(ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT)
         binding.swipeRefresh.setStyle()
         scrollViewWith(
             binding.recycler,
@@ -831,6 +829,27 @@ class RecentsController(bundle: Bundle? = null) :
         } else {
             // Remove all chapters belonging to manga from library
             presenter.removeFromHistory(history)
+        }
+    }
+
+    override fun bookmarkChapter(position: Int) {
+        val item = adapter.getItem(position) as? RecentMangaItem ?: return
+        val holder = binding.recycler.findViewHolderForAdapterPosition(position)
+        val holderId = (holder as? RecentMangaHolder)?.chapterId
+        adapter.notifyItemChanged(position)
+        if (holderId == -1L) return
+        val chapter = holderId?.let { item.mch.extraChapters.find { holderId == it.id } }
+            ?: item.chapter
+        val bookmarked = !chapter.bookmark
+        presenter.bookmarkChapter(chapter, bookmarked)
+        snack = view?.snack(
+            if (bookmarked) MR.strings.bookmarked else MR.strings.removed_bookmark,
+        ) {
+            anchorView = activityBinding?.bottomNav
+            setAction(MR.strings.undo) {
+                presenter.bookmarkChapter(chapter, !bookmarked)
+                adapter.notifyItemChanged(position)
+            }
         }
     }
 

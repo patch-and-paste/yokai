@@ -178,6 +178,9 @@ class RecentMangaHolder(
             binding.read.setImageResource(
                 if (item.read) R.drawable.ic_eye_off_24dp else R.drawable.ic_eye_24dp,
             )
+            binding.bookmark.setImageResource(
+                if (item.bookmark) R.drawable.ic_bookmark_off_24dp else R.drawable.ic_bookmark_24dp,
+            )
         }
 
         binding.showMoreChapters.isVisible = item.mch.extraChapters.isNotEmpty() &&
@@ -498,5 +501,9 @@ class RecentMangaHolder(
 
     override fun getRearEndView(): View? {
         return if (chapterId == -1L) null else binding.endView
+    }
+
+    override fun getRearStartView(): View? {
+        return if (chapterId == -1L) null else binding.startView
     }
 }

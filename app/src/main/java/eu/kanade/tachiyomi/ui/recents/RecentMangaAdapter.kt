@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.recents
 
 import android.view.View
 import androidx.recyclerview.widget.ItemTouchHelper
+import eu.kanade.tachiyomi.util.system.isLTR
 import eu.davidea.flexibleadapter.items.IFlexible
 import eu.kanade.tachiyomi.core.preference.Preference
 import eu.kanade.tachiyomi.data.database.models.Chapter
@@ -108,6 +109,7 @@ class RecentMangaAdapter(val delegate: RecentsInterface) :
         fun updateExpandedExtraChapters(position: Int, expanded: Boolean)
         fun areExtraChaptersExpanded(position: Int): Boolean
         fun markAsRead(position: Int)
+        fun bookmarkChapter(position: Int)
         fun alwaysExpanded(): Boolean
         fun scope(): CoroutineScope
         fun getViewType(): RecentsViewType
@@ -116,9 +118,19 @@ class RecentMangaAdapter(val delegate: RecentsInterface) :
 
     override fun onItemSwiped(position: Int, direction: Int) {
         super.onItemSwiped(position, direction)
+        // Same hands as the chapter list in manga details, so the gesture means the same thing
+        // in both places
         when (direction) {
-            ItemTouchHelper.LEFT -> delegate.markAsRead(position)
-            ItemTouchHelper.RIGHT -> delegate.markAsRead(position)
+            ItemTouchHelper.RIGHT -> if (recyclerView.resources.isLTR) {
+                delegate.bookmarkChapter(position)
+            } else {
+                delegate.markAsRead(position)
+            }
+            ItemTouchHelper.LEFT -> if (recyclerView.resources.isLTR) {
+                delegate.markAsRead(position)
+            } else {
+                delegate.bookmarkChapter(position)
+            }
         }
     }
 

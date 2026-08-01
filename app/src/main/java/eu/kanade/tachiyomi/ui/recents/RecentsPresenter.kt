@@ -42,6 +42,7 @@ import uy.kohesive.injekt.injectLazy
 import yokai.data.DatabaseHandler
 import yokai.domain.chapter.interactor.GetChapter
 import yokai.domain.chapter.interactor.UpdateChapter
+import yokai.domain.chapter.models.ChapterUpdate
 import yokai.domain.history.interactor.GetHistory
 import yokai.domain.history.interactor.UpsertHistory
 import yokai.domain.recents.RecentsPreferences
@@ -615,6 +616,18 @@ class RecentsPresenter(
      * Mark the selected chapter list as read/unread.
      * @param read whether to mark chapters as read or unread.
      */
+    /**
+     * Toggles the bookmark on [chapter], mirroring the swipe available in the chapter list.
+     */
+    fun bookmarkChapter(chapter: Chapter, bookmarked: Boolean) {
+        presenterScope.launchNonCancellableIO {
+            chapter.bookmark = bookmarked
+            updateChapter.await(
+                ChapterUpdate(id = chapter.id!!, bookmark = bookmarked),
+            )
+        }
+    }
+
     fun markChapterRead(
         chapter: Chapter,
         read: Boolean,
