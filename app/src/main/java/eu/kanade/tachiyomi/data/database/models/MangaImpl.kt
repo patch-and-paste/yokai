@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.data.database.models
 
-import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.DownloadProvider
 import eu.kanade.tachiyomi.data.library.CustomMangaManager
 import eu.kanade.tachiyomi.domain.manga.models.Manga
@@ -99,9 +98,9 @@ open class MangaImpl(
             val oldTitle = this.ogTitle
             this.ogTitle = remoteTitle
 
-            val db: DownloadManager by injectLazy()
-            val provider = DownloadProvider(db.context)
-            provider.renameMangaFolder(oldTitle, this.ogTitle, source)
+            // Download folders are named after ogTitle, so the rename has to land before anything
+            // asks for the directory again. It stays on this thread for that reason.
+            downloadProvider.renameMangaFolder(oldTitle, this.ogTitle, source)
         }
         super.copyFrom(other)
     }
@@ -121,5 +120,11 @@ open class MangaImpl(
         } else {
             (id ?: 0L).hashCode()
         }
+    }
+
+    private companion object {
+        // Held on the companion because a library holds thousands of these, and because the
+        // registered provider caches the directory lookups a fresh instance would repeat.
+        val downloadProvider: DownloadProvider by injectLazy()
     }
 }
