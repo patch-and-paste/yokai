@@ -626,6 +626,8 @@
     <string name="enhanced_tracking_info">Services that provide enhanced features for specific sources. Entries are automatically tracked when added to your library.</string>
     <string name="update_tracking_after_reading">Update tracking after reading</string>
     <string name="update_tracking_marked_read">Update tracking when marked as read</string>
+    <string name="auto_sync_progress_from_trackers">Sync progress from trackers</string>
+    <string name="auto_sync_progress_from_trackers_summary">When a tracker is further ahead, mark those chapters read here too</string>
     <string name="anilist_private_tracking">Track privately on AniList</string>
     <string name="anilist_private_tracking_summary">Entries stay on your list but off your public activity feed</string>
     <string name="reading">Reading</string>

@@ -55,6 +55,7 @@ import eu.kanade.tachiyomi.util.chapter.ChapterSort
 import eu.kanade.tachiyomi.util.chapter.ChapterUtil
 import eu.kanade.tachiyomi.util.chapter.syncChaptersWithSource
 import eu.kanade.tachiyomi.util.chapter.syncChaptersWithTrackServiceTwoWay
+import eu.kanade.tachiyomi.util.chapter.syncReadProgressFromTracker
 import eu.kanade.tachiyomi.util.chapter.updateTrackChapterMarkedAsRead
 import eu.kanade.tachiyomi.util.isLocal
 import eu.kanade.tachiyomi.util.lang.trimOrNull
@@ -1024,6 +1025,12 @@ class MangaDetailsPresenter(
                             if (trackItem != null) {
                                 insertTrack.await(trackItem)
                                 syncChaptersWithTrackServiceTwoWay(chapters, trackItem, item.service)
+                                // Enhanced services already reconcile both directions above
+                                if (item.service !is EnhancedTrackService &&
+                                    preferences.autoSyncProgressFromTrackers().get()
+                                ) {
+                                    syncReadProgressFromTracker(allChapters.map { it.chapter }, trackItem)
+                                }
                                 trackItem
                             } else {
                                 item.track

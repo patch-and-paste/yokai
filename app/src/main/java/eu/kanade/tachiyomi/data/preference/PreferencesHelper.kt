@@ -168,6 +168,9 @@ class PreferencesHelper(val context: Context, val preferenceStore: PreferenceSto
 
     fun trackMarkedAsRead() = preferenceStore.getBoolean(Keys.trackMarkedAsRead, false)
 
+    /** Pulls read progress down from trackers that were moved on somewhere else. */
+    fun autoSyncProgressFromTrackers() = preferenceStore.getBoolean("auto_sync_progress_from_trackers", false)
+
     fun trackingsToAddOnline() = preferenceStore.getStringSet(Keys.trackingsToAddOnline, emptySet())
 
     // TODO: SourcePref

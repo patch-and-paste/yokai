@@ -29,6 +29,29 @@ import yokai.domain.track.interactor.InsertTrack
  * @param remoteTrack the remote Track object.
  * @param service the tracker service.
  */
+/**
+ * Marks local chapters read up to whatever [remoteTrack] reports, for the case where the tracker
+ * was moved on elsewhere. Only pulls: pushing local progress back up is already handled when a
+ * chapter is read, and doing both here would have the two fighting over the same number.
+ *
+ * @return how many chapters changed.
+ */
+suspend fun syncReadProgressFromTracker(
+    chapters: List<Chapter>,
+    remoteTrack: Track,
+    updateChapter: UpdateChapter = Injekt.get(),
+): Int = withIOContext {
+    val remoteRead = remoteTrack.last_chapter_read
+    if (remoteRead <= 0f) return@withIOContext 0
+
+    val behind = chapters.filter { !it.read && it.isRecognizedNumber && it.chapter_number <= remoteRead }
+    if (behind.isEmpty()) return@withIOContext 0
+
+    behind.forEach { it.read = true }
+    updateChapter.awaitAll(behind.map(Chapter::toProgressUpdate))
+    behind.size
+}
+
 suspend fun syncChaptersWithTrackServiceTwoWay(
     chapters: List<Chapter>,
     remoteTrack: Track,
