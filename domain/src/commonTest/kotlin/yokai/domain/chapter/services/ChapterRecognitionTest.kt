@@ -271,6 +271,23 @@ class ChapterRecognitionTest {
         assertChapter(mangaTitle, "The 4th Night", 4f)
     }
 
+    @Test
+    fun `Chapters using a CJK marker`() {
+        assertChapter("악역 영애 레벨 99", "악역 영애 레벨 99 3화", 3f)
+        assertChapter("Kanojo", "第12話 タイトル", 12f)
+        assertChapter("Wu Dong Qian Kun", "第 7 章", 7f)
+        assertChapter("Solo Leveling", "제 3 장", 3f)
+        assertChapter("Douluo Dalu", "7话", 7f)
+        assertChapter("Nanatsu", "5回", 5f)
+        assertChapter("악역 영애 레벨 99", "제3.5화", 3.5f)
+    }
+
+    @Test
+    fun `CJK marker outranks a number in the series name`() {
+        // The series name is not stripped when the source lists it under a different title
+        assertChapter("Villainess Level 99", "악역 영애 레벨 99 3화", 3f)
+    }
+
     private fun assertChapter(mangaTitle: String, name: String, expected: Float) {
         ChapterRecognition.parseChapterNumber(name, mangaTitle) shouldBe expected
     }

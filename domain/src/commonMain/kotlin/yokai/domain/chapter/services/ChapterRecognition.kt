@@ -19,6 +19,12 @@ object ChapterRecognition {
     private val number = Regex(NUMBER_PATTERN)
 
     /**
+     * A CJK chapter marker, which trails its number: 3화, 第3話, 제 3 장, 7话, 5回.
+     * Example: 악역 영애 레벨 99 3화 -R> 3
+     */
+    private val cjkMarker = Regex("""$NUMBER_PATTERN(?= *[화話话回章장])""")
+
+    /**
      * Regex used to remove unwanted tags
      * Example Prison School 12 v.1 vol004 version1243 volume64 -R> Prison School 12
      */
@@ -45,6 +51,10 @@ object ChapterRecognition {
             .replace('-', '.')
             // Remove unwanted white spaces.
             .replace(unwantedWhiteSpace, "")
+
+        // A marker names its number outright, so it outranks a number that only happens to sit
+        // in the series name.
+        cjkMarker.find(cleanChapterName)?.let { return getChapterNumberFromMatch(it) }
 
         val numberMatch = number.findAll(cleanChapterName)
 
