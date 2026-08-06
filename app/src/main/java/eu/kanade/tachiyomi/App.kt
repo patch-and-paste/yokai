@@ -335,7 +335,10 @@ fun buildLogWritersToAdd(
 ) = buildList {
     if (!BuildConfig.DEBUG) add(CrashlyticsLogWriter())
 
- //   if (logPath != null && !BuildConfig.DEBUG) add(RollingUniFileLogWriter(logPath = logPath, isVerbose = isVerbose))
+    // Release builds have no logcat to fall back on, and CrashLogUtil only dumps `logcat *:E -d`,
+    // which is error-only and gone after a reboot. Without a file on disk a library update that
+    // dies mid-run leaves nothing to diagnose it with.
+    if (logPath != null && !BuildConfig.DEBUG) add(RollingUniFileLogWriter(logPath = logPath, isVerbose = isVerbose))
 }
 
 private const val ACTION_DISABLE_INCOGNITO_MODE = "tachi.action.DISABLE_INCOGNITO_MODE"

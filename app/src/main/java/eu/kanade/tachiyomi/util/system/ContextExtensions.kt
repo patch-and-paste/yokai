@@ -413,12 +413,20 @@ fun setLocaleByAppCompat() {
     }
 }
 
-suspend fun CoroutineWorker.tryToSetForeground() {
-    try {
+/**
+ * Returns whether the worker actually became a foreground service. When it didn't, the job keeps
+ * running as an ordinary worker and is back under the ~10 minute JobScheduler execution cap, so
+ * callers doing long work want to know: being killed at the cap looks identical to a crash from
+ * the outside.
+ */
+suspend fun CoroutineWorker.tryToSetForeground(): Boolean {
+    return try {
         setForeground(getForegroundInfo())
         delay(1000)
+        true
     } catch (e: IllegalStateException) {
         Logger.e(e) { "Not allowed to set foreground job" }
+        false
     }
 }
 

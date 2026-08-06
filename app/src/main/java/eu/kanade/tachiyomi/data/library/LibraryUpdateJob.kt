@@ -52,7 +52,6 @@ import eu.kanade.tachiyomi.util.isLocal
 import eu.kanade.tachiyomi.util.shouldDownloadNewChapters
 import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
-import eu.kanade.tachiyomi.util.system.e
 import eu.kanade.tachiyomi.util.system.isConnectedToWifi
 import eu.kanade.tachiyomi.util.system.localeContext
 import eu.kanade.tachiyomi.util.system.tryToSetForeground
@@ -62,15 +61,22 @@ import java.lang.ref.WeakReference
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.CancellationException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
@@ -80,8 +86,14 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -112,34 +124,49 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     private val getTrack: GetTrack = Injekt.get()
     private val insertTrack: InsertTrack by injectLazy()
 
-    private var extraDeferredJobs = mutableListOf<Deferred<Any>>()
+    // Everything below is touched by several source coroutines at once, so none of it can be a
+    // plain mutable collection. Concurrent writes to a LinkedHashMap can throw or corrupt it, and
+    // one of those writes happens inside a catch block where a throw would escape every guard.
+    private val extraDeferredJobs = CopyOnWriteArrayList<Deferred<Any>>()
 
     private val extraScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val emitScope = MainScope()
 
-    private val mangaToUpdate = mutableListOf<LibraryManga>()
+    private val mangaToUpdate = CopyOnWriteArrayList<LibraryManga>()
 
-    private val mangaToUpdateMap = mutableMapOf<Long, List<LibraryManga>>()
+    private val mangaToUpdateMap = ConcurrentHashMap<Long, List<LibraryManga>>()
 
-    private val categoryIds = mutableSetOf<Int>()
+    private val categoryIds = ConcurrentHashMap.newKeySet<Int>()
 
     // List containing new updates
-    private val newUpdates = mutableMapOf<LibraryManga, Array<Chapter>>()
+    private val newUpdates = ConcurrentHashMap<LibraryManga, Array<Chapter>>()
 
-    // List containing failed updates
-    private val failedUpdates = mutableMapOf<Manga, String?>()
+    // List containing failed updates. Values are never null: a null reason would collapse every
+    // unrelated failure under one "null" heading in the error file, and ConcurrentHashMap rejects
+    // it anyway.
+    private val failedUpdates = ConcurrentHashMap<Manga, String>()
 
     // List containing skipped updates
-    private val skippedUpdates = mutableMapOf<Manga, String?>()
+    private val skippedUpdates = ConcurrentHashMap<Manga, String>()
 
     val count = AtomicInteger(0)
+
+    /** How far each source has got through its list, so an abandoned source can report the rest. */
+    private val sourceProgress = ConcurrentHashMap<Long, Int>()
+
+    /** One worker per source at a time, so a source never sees more traffic than it used to. */
+    private val sourceLocks = ConcurrentHashMap<Long, Mutex>()
+
+    /** When any entry anywhere in the run last finished. Drives the stall watchdog. */
+    private val lastProgressAt = AtomicLong(0L)
 
     // Boolean to determine if user wants to automatically download new chapters.
     private val downloadNew: Boolean = preferences.downloadNewChapters().get()
 
     // Boolean to determine if DownloadManager has downloads
-    private var hasDownloads = false
+    private val hasDownloads = AtomicBoolean(false)
 
+    /** Global cap on in-flight network requests, held only around the fetch itself. */
     private val requestSemaphore = Semaphore(5)
 
     // For updates delete removed chapters if not preference is set as well
@@ -161,7 +188,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             }
         }
 
-        tryToSetForeground()
+        if (!tryToSetForeground()) {
+            // Without a foreground service the system reclaims the job at the ~10 minute execution
+            // cap. From the outside that is indistinguishable from a source crashing, so say so.
+            Logger.w { "Library update is not a foreground service, it may be killed at the execution cap" }
+        }
 
         instance = WeakReference(this)
 
@@ -193,19 +224,33 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             try {
                 launchTarget(target, mangaList)
                 Result.success()
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // Catching Throwable, not Exception: extensions are separately compiled APKs, so a
+                // stale one throws NoClassDefFoundError or AbstractMethodError rather than an
+                // Exception, and those used to bypass every catch here and kill the run in silence.
                 if (e is CancellationException) {
                     // Assume success although cancelled
-                    finishUpdates(true)
                     Result.success()
                 } else {
                     Logger.e(e) { "Failed to update library" }
                     Result.failure()
                 }
             } finally {
-                instance = null
-                sendUpdate(null)
-                notifier.cancelProgressNotification()
+                // The report has to survive both cancellation and an unexpected throw, otherwise
+                // the run vanishes with no result notification and no error file — which is what
+                // made these failures impossible to diagnose on a release build.
+                withContext(NonCancellable) {
+                    try {
+                        if (target == Target.CHAPTERS) finishUpdates(wasStopped = isStopped)
+                    } catch (e: Throwable) {
+                        // Reporting must never take the cleanup below down with it.
+                        Logger.e(e) { "Failed to report library update results" }
+                    }
+                    instance = null
+                    sendUpdate(null)
+                    notifier.cancelProgressNotification()
+                    extraScope.cancel()
+                }
             }
         }
     }
@@ -234,24 +279,69 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         mangaToUpdate.addAll(mangaToAdd)
         mangaToUpdateMap.putAll(mangaToAdd.groupBy { it.manga.source })
         checkIfMassiveUpdate()
-        coroutineScope {
-            val list = mangaToUpdateMap.keys.map { source ->
-                async {
-                    try {
-                        requestSemaphore.withPermit { updateMangaInSource(source) }
-                    } catch (e: Exception) {
-                        Logger.e(e) { "Unable to update manga" }
-                        false
-                    }
-                }
-            }
-            val results = list.awaitAll()
-            if (!hasDownloads) {
-                hasDownloads = results.any { it }
-            }
-            finishUpdates()
+        noteProgress()
+
+        // Source jobs run detached on purpose. A request stuck in the legacy Rx path blocks its
+        // thread and ignores cancellation, so under structured concurrency the whole update would
+        // hang waiting for it. Detached, the watchdog below can stop waiting on it and still
+        // report everything that did finish.
+        val jobs = mangaToUpdateMap.keys.associateWith { source ->
+            extraScope.async { runSourceJob(source) }
+        }
+        awaitSourcesOrStall(jobs)
+    }
+
+    /**
+     * Runs one source's queue to completion, recording anything it doesn't reach. A source that
+     * threw part way through used to drop its remaining entries with nothing written anywhere, so
+     * a partial update was indistinguishable from a finished one.
+     */
+    private suspend fun runSourceJob(source: Long) {
+        try {
+            if (updateMangaInSource(source)) hasDownloads.set(true)
+        } catch (e: Throwable) {
+            if (e is CancellationException) throw e
+            failRemainingInSource(source, e)
+            Logger.e(e) { "Unable to update source ${sourceManager.getOrStub(source)}" }
         }
     }
+
+    /**
+     * Waits for every source, giving up once the run as a whole has stopped making progress. The
+     * stuck request itself can't be killed, but abandoning the wait turns a silent hang into a
+     * named entry in the error file.
+     */
+    private suspend fun awaitSourcesOrStall(jobs: Map<Long, Deferred<Unit>>) {
+        while (true) {
+            val pending = jobs.filterValues { !it.isCompleted }
+            if (pending.isEmpty()) return
+
+            val remaining = STALL_TIMEOUT_MS - (System.currentTimeMillis() - lastProgressAt.get())
+            if (remaining <= 0) {
+                pending.forEach { (source, job) ->
+                    failRemainingInSource(source, StalledSourceException(STALL_TIMEOUT_MS / 60_000))
+                    Logger.e { "Abandoning stalled source ${sourceManager.getOrStub(source)}" }
+                    // Best effort: unsticks a source that suspends properly, no-op for one blocked
+                    // on a synchronous call.
+                    job.cancel()
+                }
+                return
+            }
+            withTimeoutOrNull(remaining) { pending.values.awaitAll() }
+        }
+    }
+
+    /**
+     * Marks every entry this source never got to as failed, so it reaches the error notification
+     * and `tachiyomi_update_errors.txt` instead of disappearing.
+     */
+    private fun failRemainingInSource(source: Long, e: Throwable) {
+        val reason = e.message?.takeIf { it.isNotBlank() } ?: e.toString()
+        val reached = sourceProgress[source] ?: 0
+        mangaToUpdateMap[source].orEmpty().drop(reached).forEach { failedUpdates[it.manga] = reason }
+    }
+
+    private fun noteProgress() = lastProgressAt.set(System.currentTimeMillis())
 
     /**
      * Method that updates the details of the given list of manga. It's called in a background
@@ -259,14 +349,17 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
      *
      * @param mangaToUpdate the list to update
      */
-    private suspend fun updateDetails(mangaToUpdate: List<LibraryManga>) = coroutineScope {
+    private suspend fun updateDetails(mangaToUpdate: List<LibraryManga>) = supervisorScope {
         // Initialize the variables holding the progress of the updates.
         val count = AtomicInteger(0)
         val asyncList = mangaToUpdate.groupBy { it.manga.source }.values.map { list ->
             async {
-                requestSemaphore.withPermit {
+                try {
                     list.forEach { manga ->
                         ensureActive()
+                        // finishUpdates calls this from a NonCancellable block, where ensureActive
+                        // can never trip, so stopping the update has to be checked directly.
+                        if (isStopped) return@async
                         val source = sourceManager.get(manga.manga.source) as? CatalogueSource ?: return@async
                         notifier.showProgressNotification(
                             manga.manga,
@@ -275,9 +368,12 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                         )
                         ensureActive()
                         val networkManga = try {
-                            source.awaitMangaUpdate(manga.manga.copy(), fetchDetails = true).manga
-                        } catch (e: java.lang.Exception) {
-                            Logger.e(e)
+                            requestSemaphore.withPermit {
+                                source.awaitMangaUpdate(manga.manga.copy(), fetchDetails = true).manga
+                            }
+                        } catch (e: Throwable) {
+                            if (e is CancellationException) throw e
+                            Logger.e(e) { "Failed to refresh details for ${manga.manga.title}" }
                             null
                         }
                         if (networkManga != null) {
@@ -300,6 +396,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                             updateManga.await(manga.manga.toMangaUpdate())
                         }
                     }
+                } catch (e: Throwable) {
+                    if (e is CancellationException) throw e
+                    Logger.e(e) { "Failed to refresh details for source ${sourceManager.getOrStub(list.first().manga.source)}" }
                 }
             }
         }
@@ -330,8 +429,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                         insertTrack.await(newTrack)
 
                         syncChaptersWithTrackServiceTwoWay(getChapter.awaitAll(manga.manga.id!!, false), track, service)
-                    } catch (e: Exception) {
-                        Logger.e(e)
+                    } catch (e: Throwable) {
+                        if (e is CancellationException) throw e
+                        Logger.e(e) { "Failed to refresh tracking for ${manga.manga.title}" }
                     }
                 }
             }
@@ -341,34 +441,52 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
     private suspend fun finishUpdates(wasStopped: Boolean = false) {
         if (!wasStopped && !isStopped) {
-            extraDeferredJobs.awaitAll()
+            // Bounded, and bounded by what is *left* of the stall budget: a source queued mid-run
+            // can wedge like any other, and this runs from a finally block, so an unbounded await
+            // here would hang the worker instead of the loop. If the run already stalled there is
+            // no budget left and this returns at once.
+            val budget = (STALL_TIMEOUT_MS - (System.currentTimeMillis() - lastProgressAt.get()))
+                .coerceAtLeast(0)
+            withTimeoutOrNull(budget) { extraDeferredJobs.awaitAll() }
         }
         if (newUpdates.isNotEmpty()) {
             notifier.showResultNotification(newUpdates)
             if (!wasStopped && preferences.refreshCoversToo().get() && !isStopped) {
                 updateDetails(newUpdates.keys.toList())
                 notifier.cancelProgressNotification()
-                if (downloadNew && hasDownloads) {
+                if (downloadNew && hasDownloads.get()) {
                     DownloadJob.start(context, runExtensionUpdatesAfter)
                     runExtensionUpdatesAfter = false
                 }
-            } else if (downloadNew && hasDownloads) {
+            } else if (downloadNew && hasDownloads.get()) {
                 DownloadJob.start(applicationContext, runExtensionUpdatesAfter)
                 runExtensionUpdatesAfter = false
             }
         }
         newUpdates.clear()
-        if (skippedUpdates.isNotEmpty() && Notifications.isNotificationChannelEnabled(context, Notifications.CHANNEL_LIBRARY_SKIPPED)) {
+        // The report files are written whether or not their channel is on. They are the only
+        // durable record of what went wrong, and gating the file on a notification setting left a
+        // user who had muted the channel with no way at all to find out.
+        if (skippedUpdates.isNotEmpty()) {
             val skippedFile = writeErrorFile(
                 skippedUpdates,
                 "skipped",
                 context.getString(MR.strings.learn_why) + " - " + LibraryUpdateNotifier.HELP_SKIPPED_URL,
-            ).getUriCompat(context)
-            notifier.showUpdateSkippedNotification(skippedUpdates.map { it.key.title }, skippedFile)
+            )
+            if (skippedFile.exists() &&
+                Notifications.isNotificationChannelEnabled(context, Notifications.CHANNEL_LIBRARY_SKIPPED)
+            ) {
+                notifier.showUpdateSkippedNotification(skippedUpdates.map { it.key.title }, skippedFile.getUriCompat(context))
+            }
         }
-        if (failedUpdates.isNotEmpty() && Notifications.isNotificationChannelEnabled(context, Notifications.CHANNEL_LIBRARY_ERROR)) {
-            val errorFile = writeErrorFile(failedUpdates).getUriCompat(context)
-            notifier.showUpdateErrorNotification(failedUpdates.map { it.key.title }, errorFile)
+        if (failedUpdates.isNotEmpty()) {
+            Logger.e { "Library update finished with ${failedUpdates.size} failed entries" }
+            val errorFile = writeErrorFile(failedUpdates)
+            if (errorFile.exists() &&
+                Notifications.isNotificationChannelEnabled(context, Notifications.CHANNEL_LIBRARY_ERROR)
+            ) {
+                notifier.showUpdateErrorNotification(failedUpdates.map { it.key.title }, errorFile.getUriCompat(context))
+            }
         }
         mangaShortcutManager.updateShortcuts(context)
         failedUpdates.clear()
@@ -390,37 +508,62 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     }
 
     private suspend fun updateMangaInSource(source: Long): Boolean {
-        if (mangaToUpdateMap[source] == null) return false
-        var count = 0
-        var hasDownloads = false
-        val sourceObj = sourceManager.get(source) as? CatalogueSource ?: return false
-        while (count < mangaToUpdateMap[source]!!.size) {
-            val manga = mangaToUpdateMap[source]!![count]
-            val shouldDownload = manga.manga.shouldDownloadNewChapters(preferences)
-            if (updateMangaChapters(manga, this.count.andIncrement, sourceObj, shouldDownload)) {
-                hasDownloads = true
-            }
-            count++
+        val sourceObj = sourceManager.get(source) as? CatalogueSource
+        if (sourceObj == null) {
+            // Usually an extension that was uninstalled or failed to load. These entries used to be
+            // dropped without a word, which looks identical to them being up to date.
+            failRemainingInSource(source, SourceUnavailableException())
+            mangaToUpdateMap[source] = emptyList()
+            return false
         }
-        mangaToUpdateMap[source] = emptyList()
-        return hasDownloads
+        // One worker per source. Entries added mid-run append to the existing queue rather than
+        // starting a second job, but that check races with this loop finishing, so hold the lock
+        // to keep the guarantee that a source never sees two concurrent requests.
+        return sourceLocks.computeIfAbsent(source) { Mutex() }.withLock {
+            var hasDownloadsForSource = false
+            var index = 0
+            // addManga can append to this source's queue while we work through it, so re-read the
+            // list each round instead of holding a snapshot, and run off the end rather than
+            // indexing a list that was swapped underneath us.
+            while (true) {
+                val manga = mangaToUpdateMap[source]?.getOrNull(index) ?: break
+                if (updateMangaChapters(manga, sourceObj)) {
+                    hasDownloadsForSource = true
+                }
+                index++
+                sourceProgress[source] = index
+                noteProgress()
+            }
+            mangaToUpdateMap[source] = emptyList()
+            hasDownloadsForSource
+        }
     }
 
     private suspend fun updateMangaChapters(
         manga: LibraryManga,
-        progress: Int,
         source: CatalogueSource,
-        shouldDownload: Boolean,
     ): Boolean = coroutineScope {
         try {
             var hasDownloads = false
             ensureActive()
-            notifier.showProgressNotification(manga.manga, progress, mangaToUpdate.size)
-            val fetchedChapters = source.awaitMangaUpdate(
-                manga = manga.manga.copy(),
-                chapters = getChapter.awaitAll(manga.manga.id!!, false),
-                fetchChapters = true,
-            ).chapters
+            val shouldDownload = manga.manga.shouldDownloadNewChapters(preferences)
+            val dbChapters = getChapter.awaitAll(manga.manga.id!!, false)
+            // The permit is taken before the timeout starts so queueing behind other sources can't
+            // be mistaken for a slow source. The timeout itself only bites for sources that suspend
+            // properly: extensions on the legacy Rx path block their thread inside call.execute()
+            // and never reach a cancellation point, so the stall watchdog is what covers those.
+            val fetchedChapters = requestSemaphore.withPermit {
+                // Numbered once the fetch actually starts. Every source is queued up front now, so
+                // counting at call time would run the progress bar ahead of the real work.
+                notifier.showProgressNotification(manga.manga, count.andIncrement, mangaToUpdate.size)
+                withTimeout(FETCH_TIMEOUT_MS) {
+                    source.awaitMangaUpdate(
+                        manga = manga.manga.copy(),
+                        chapters = dbChapters,
+                        fetchChapters = true,
+                    )
+                }
+            }.chapters
 
             if (fetchedChapters.isNotEmpty()) {
                 val newChapters = syncChaptersWithSource(fetchedChapters, manga.manga, source)
@@ -455,10 +598,20 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                 }
             }
             return@coroutineScope hasDownloads
-        } catch (e: Exception) {
-            if (e !is CancellationException) {
-                failedUpdates[manga.manga] = e.message
-                Logger.e { "Failed updating: ${manga.manga.title}: $e" }
+        } catch (e: Throwable) {
+            // TimeoutCancellationException is a CancellationException, so it has to be picked off
+            // before the cancellation check or a timed-out entry reads as "the user stopped the
+            // update" and is never reported.
+            when {
+                e is TimeoutCancellationException -> {
+                    failedUpdates[manga.manga] = "Timed out after ${FETCH_TIMEOUT_MS / 1000}s"
+                    Logger.e(e) { "Timed out updating: ${manga.manga.title}" }
+                }
+                e is CancellationException -> throw e
+                else -> {
+                    failedUpdates[manga.manga] = e.message?.takeIf { it.isNotBlank() } ?: e.toString()
+                    Logger.e(e) { "Failed updating: ${manga.manga.title}" }
+                }
             }
             return@coroutineScope false
         }
@@ -582,8 +735,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                 }
                 return file
             }
-        } catch (e: Exception) {
-            // Empty
+        } catch (e: Throwable) {
+            // Callers check exists() on the result, so a failure here degrades to "no file" rather
+            // than taking the rest of the report down with it. Still worth a line: this file is
+            // often the only evidence of why an update went wrong.
+            Logger.e(e) { "Failed to write library update $fileName file" }
         }
         return File("")
     }
@@ -609,20 +765,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             // finished running
             if (mangaToUpdateMap[it.key].isNullOrEmpty()) {
                 mangaToUpdateMap[it.key] = it.value
-                extraScope.launch {
-                    extraDeferredJobs.add(
-                        async(Dispatchers.IO) {
-                            val hasDLs = try {
-                                requestSemaphore.withPermit { updateMangaInSource(it.key) }
-                            } catch (e: Exception) {
-                                false
-                            }
-                            if (!hasDownloads) {
-                                hasDownloads = hasDLs
-                            }
-                        },
-                    )
-                }
+                sourceProgress[it.key] = 0
+                extraDeferredJobs.add(extraScope.async { runSourceJob(it.key) })
             } else {
                 val list = mangaToUpdateMap[it.key] ?: emptyList()
                 mangaToUpdateMap[it.key] = (list + it.value)
@@ -647,6 +791,21 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         private const val ERROR_LOG_HELP_URL = "https://tachiyomi.org/help/guides/troubleshooting"
 
         private const val MANGA_PER_SOURCE_QUEUE_WARNING_THRESHOLD = 60
+
+        /**
+         * How long the whole run may go without finishing a single entry before the sources still
+         * outstanding are written off. Only one source has to be alive to keep this from firing, so
+         * this is time with nothing at all happening — generous enough that a heavily rate limited
+         * source won't trip it, short enough to beat the execution cap when there is no foreground
+         * service.
+         */
+        private const val STALL_TIMEOUT_MS = 5 * 60 * 1000L
+
+        /**
+         * Upper bound on a single entry's fetch, above OkHttp's own two minute callTimeout so the
+         * client's timeout wins wherever it applies.
+         */
+        private const val FETCH_TIMEOUT_MS = 3 * 60 * 1000L
 
         /**
          * Key for category to update.
@@ -753,7 +912,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             return list.any { it.state == WorkInfo.State.RUNNING }
         }
 
-        fun categoryInQueue(id: Int?) = instance?.get()?.categoryIds?.contains(id) ?: false
+        fun categoryInQueue(id: Int?) = id != null && instance?.get()?.categoryIds?.contains(id) == true
 
         fun startNow(
             context: Context,
@@ -817,3 +976,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         }
     }
 }
+
+/** Reason recorded against entries of a source that was written off by the stall watchdog. */
+private class StalledSourceException(minutes: Long) :
+    Exception("Source stopped responding, gave up after $minutes minutes with no progress")
+
+/** Reason recorded when a source's extension could not be loaded at all. */
+private class SourceUnavailableException :
+    Exception("Source is not installed or failed to load")
