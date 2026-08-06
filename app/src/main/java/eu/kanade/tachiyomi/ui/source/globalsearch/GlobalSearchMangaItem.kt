@@ -11,7 +11,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import yokai.domain.manga.models.cover
 
 // FIXME: Migrate to compose
 class GlobalSearchMangaItem(
@@ -24,6 +27,18 @@ class GlobalSearchMangaItem(
         private set
     private val scope = MainScope()
     private var job: Job? = null
+
+    /**
+     * The backing query listens on the whole `mangas` table, so every insert made by a source that
+     * is still searching re-emits here. Narrowing to the fields this card actually draws keeps those
+     * writes from rebinding the holder and restarting the cover load.
+     *
+     * Deliberately not `distinctUntilChanged`: Manga equality is url+source only, so it would
+     * swallow favorite and cover changes too.
+     */
+    private val renderFlow = mangaFlow
+        .filterNotNull()
+        .distinctUntilChangedBy { Triple(it.title, it.favorite, it.cover()) }
 
     override fun getLayoutRes(): Int {
         return R.layout.source_global_search_controller_card_item
@@ -39,11 +54,13 @@ class GlobalSearchMangaItem(
         position: Int,
         payloads: MutableList<Any?>?,
     ) {
-        if (job == null) holder.bind(manga)
+        // Bind up front: a recycled holder shows the previous card until the flow gets around to
+        // emitting, and stable ids make that reuse likely.
+        holder.bind(manga)
         job?.cancel()
         job = scope.launch {
-            mangaFlow.collectLatest {
-                manga = it ?: return@collectLatest
+            renderFlow.collectLatest {
+                manga = it
                 holder.bind(manga)
             }
         }

@@ -64,11 +64,25 @@ class GlobalSearchItem(val source: CatalogueSource, val results: List<GlobalSear
     }
 
     /**
+     * Used by the diffing update to decide whether a row needs rebinding. The default returns true
+     * for everything, which would rebind every row on every source that finishes.
+     *
+     * Results are compared by identity because the presenter swaps in a whole new list per source.
+     */
+    override fun shouldNotifyChange(newItem: IFlexible<*>?): Boolean {
+        val other = newItem as? GlobalSearchItem ?: return true
+        return results !== other.results || highlighted != other.highlighted
+    }
+
+    /**
      * Return hash code of item.
+     *
+     * Doubles as the adapter's stable id, so it has to keep the whole source id: truncating to Int
+     * would let two sources collide.
      *
      * @return hashcode
      */
     override fun hashCode(): Int {
-        return source.id.toInt()
+        return source.id.hashCode()
     }
 }

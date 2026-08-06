@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.ui.base.holder.BaseFlexibleViewHolder
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.view.makeShapeCorners
 import eu.kanade.tachiyomi.util.view.setCards
+import yokai.domain.manga.models.MangaCover
 import yokai.domain.manga.models.cover
 import yokai.util.coil.loadManga
 
@@ -17,6 +18,10 @@ class GlobalSearchMangaHolder(view: View, adapter: GlobalSearchCardAdapter) :
     BaseFlexibleViewHolder(view, adapter) {
 
     private val binding = SourceGlobalSearchControllerCardItemBinding.bind(view)
+
+    /** Cover currently requested, so a rebind for unrelated reasons doesn't restart the load. */
+    private var loadedCover: MangaCover? = null
+
     init {
         itemView.setOnClickListener {
             val item = adapter.getItem(flexibleAdapterPosition)
@@ -48,9 +53,24 @@ class GlobalSearchMangaHolder(view: View, adapter: GlobalSearchCardAdapter) :
     }
 
     fun setImage(manga: Manga) {
+        val cover = manga.cover()
+
+        if (cover.url.isEmpty()) {
+            binding.itemImage.dispose()
+            // Without this the recycled view keeps showing whichever cover it held before.
+            binding.itemImage.setImageDrawable(null)
+            loadedCover = null
+            return
+        }
+
+        // Reissuing the same cover blanks the view and flashes the spinner for a frame.
+        if (cover == loadedCover) return
+
+        loadedCover = cover
         binding.itemImage.dispose()
-        if (!manga.thumbnail_url.isNullOrEmpty()) {
-            binding.itemImage.loadManga(manga.cover(), binding.progress)
+        binding.itemImage.loadManga(cover, binding.progress) {
+            // Let a failed load be retried on the next real bind.
+            listener(onError = { _, _ -> loadedCover = null })
         }
     }
 }

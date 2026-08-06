@@ -63,6 +63,11 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Long tap chapters on Reader now mark it as read (@lalalasupa0)
 
 ### Fixes
+- Covers in global search no longer flicker while the remaining sources are still being searched
+  - Every result card watched the whole `mangas` table, so each entry another source saved
+    reloaded every cover already on screen
+  - Result rows are now updated one at a time as each source finishes, instead of redrawing the
+    whole list, so rows slide into place rather than jumping and keep their scroll position
 - An extension offered by two repos is no longer listed twice, and updates now come from the repo
   that can actually install them rather than whichever one was read first
 - An extension that reappeared in a repo stayed marked obsolete until the app was restarted

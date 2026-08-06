@@ -340,7 +340,9 @@ presenter.canSearchAllSources
                 activityBinding?.appBar?.updateAppBarAfterY(binding.recycler)
             }
         }
-        adapter?.updateDataSet(searchResult)
+        // Diffed rather than notifyDataSetChanged: sources finish one at a time, and rebinding every
+        // row each time makes the list jump and restarts the cover loads.
+        adapter?.updateDataSet(searchResult, true)
     }
 
     /**
