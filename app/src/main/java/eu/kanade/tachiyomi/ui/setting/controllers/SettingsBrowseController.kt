@@ -41,7 +41,9 @@ import eu.kanade.tachiyomi.util.view.snack
 import eu.kanade.tachiyomi.util.view.withFadeTransaction
 import uy.kohesive.injekt.injectLazy
 import yokai.domain.base.BasePreferences.ExtensionInstaller
+import yokai.domain.source.interactor.GetSourceGroups
 import yokai.presentation.extension.repo.ExtensionRepoController
+import yokai.presentation.source.group.SourceGroupsController
 
 class SettingsBrowseController : SettingsLegacyController() {
 
@@ -50,6 +52,8 @@ class SettingsBrowseController : SettingsLegacyController() {
 
     private val uiPreferences: UiPreferences by injectLazy()
 
+    private val getSourceGroups: GetSourceGroups by injectLazy()
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) = screen.apply {
         titleRes = MR.strings.browse
 
@@ -57,6 +61,13 @@ class SettingsBrowseController : SettingsLegacyController() {
             switchPreference {
                 bindTo(preferences.hideInLibraryItems())
                 titleRes = MR.strings.hide_in_library_items
+            }
+            preference {
+                // Not "source_groups": that key holds the groups themselves in the same store
+                key = "source_groups_screen"
+                titleRes = MR.strings.source_groups
+                summaryRes = MR.strings.source_groups_summary
+                onClick { router.pushController(SourceGroupsController().withFadeTransaction()) }
             }
         }
 
@@ -160,8 +171,10 @@ class SettingsBrowseController : SettingsLegacyController() {
                 summaryRes = MR.strings.only_enable_pinned_for_migration
                 onClick {
                     val ogSources = preferences.migrationSources().get()
-                    val pinnedSources =
-                        preferences.pinnedCatalogues().get().joinToString("/")
+                    val groupedIds = getSourceGroups.groupedSourceIds()
+                    val pinnedSources = preferences.pinnedCatalogues().get()
+                        .filterNot { it.toLongOrNull() in groupedIds }
+                        .joinToString("/")
                     preferences.migrationSources().set(pinnedSources)
                     (activity as? MainActivity)?.setUndoSnackBar(
                         view?.snack(
@@ -183,9 +196,11 @@ class SettingsBrowseController : SettingsLegacyController() {
                     val ogSources = preferences.migrationSources().get()
                     val languages = preferences.enabledLanguages().get()
                     val hiddenCatalogues = preferences.hiddenSources().get()
+                    val groupedIds = getSourceGroups.groupedSourceIds()
                     val enabledSources =
                         sourceManager.getCatalogueSources().filter { it.lang in languages }
                             .filterNot { it.id.toString() in hiddenCatalogues }
+                            .filterNot { it.id in groupedIds }
                             .sortedBy { "(${it.lang}) ${it.name}" }
                             .joinToString("/") { it.id.toString() }
                     preferences.migrationSources().set(enabledSources)

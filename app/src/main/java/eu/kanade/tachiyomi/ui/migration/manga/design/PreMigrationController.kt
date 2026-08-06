@@ -34,6 +34,7 @@ import eu.kanade.tachiyomi.util.view.expand
 import eu.kanade.tachiyomi.util.view.liftAppbarWith
 import eu.kanade.tachiyomi.util.view.withFadeTransaction
 import uy.kohesive.injekt.injectLazy
+import yokai.domain.source.interactor.GetSourceGroups
 
 class PreMigrationController(bundle: Bundle? = null) :
     BaseLegacyController<PreMigrationControllerBinding>(bundle),
@@ -42,6 +43,7 @@ class PreMigrationController(bundle: Bundle? = null) :
     StartMigrationListener {
     private val sourceManager: SourceManager by injectLazy()
     private val prefs: PreferencesHelper by injectLazy()
+    private val getSourceGroups: GetSourceGroups by injectLazy()
 
     private var adapter: MigrationSourceAdapter? = null
 
@@ -143,9 +145,11 @@ class PreMigrationController(bundle: Bundle? = null) :
     private fun getEnabledSources(): List<HttpSource> {
         val languages = prefs.enabledLanguages().get()
         val sourcesSaved = prefs.migrationSources().get().split("/")
+        val groupedIds = getSourceGroups.groupedSourceIds()
         var sources = sourceManager.getCatalogueSources()
             .filterIsInstance<HttpSource>()
             .filter { it.lang in languages }
+            .filterNot { it.id in groupedIds }
             .sortedBy { "(${it.lang}) ${it.name}" }
         sources =
             sources.filter { isEnabled(it.id.toString()) }.sortedBy {

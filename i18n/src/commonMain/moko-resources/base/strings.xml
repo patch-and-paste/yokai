@@ -333,6 +333,10 @@
     <string name="browse_long_tap_default">Open extensions / migration menu</string>
     <string name="browse_long_tap_search">Open global search</string>
     <string name="browse_long_tap">Long tap Browse behavior</string>
+    <string name="source_groups">Source groups</string>
+    <string name="search_group_hint">Search %1$s…</string>
+    <string name="information_empty_source_group">This group has no sources yet.</string>
+    <string name="add_sources_to_group">Add sources</string>
 
     <!-- Other Screens -->
 
@@ -955,6 +959,27 @@
     <string name="content_rating_allow_mixed">Safe and mixed</string>
     <string name="content_rating_allow_nsfw">All, including NSFW (18+)</string>
     <string name="content_rating_only_applies_to_declared">Extensions built before extension lib 1.6 only declare whether they are NSFW, so they are shown as either safe or NSFW.</string>
+
+    <!-- Source groups -->
+    <string name="source_groups_summary">Bundle sources together and hide them from the main Browse list</string>
+    <string name="create_source_group">Create source group</string>
+    <string name="rename_source_group">Rename source group</string>
+    <string name="source_group_name">Group name</string>
+    <string name="source_group_name_cannot_be_blank">Group name cannot be blank</string>
+    <string name="source_group_with_name_exists">A group with that name already exists</string>
+    <string name="confirm_source_group_deletion">Delete group?</string>
+    <string name="confirm_source_group_deletion_message">Sources in \"%1$s\" go back to the normal
+        Browse list. Nothing is uninstalled.</string>
+    <string name="show_group_in_browse">Show in Browse</string>
+    <string name="show_group_in_browse_summary">Turn off to reach this group only from the Browse
+        menu</string>
+    <string name="include_group_in_global_search">Include in global search</string>
+    <string name="include_group_in_global_search_summary">Turn off to skip this group\'s sources in
+        global search</string>
+    <string name="edit_group_sources">Edit sources</string>
+    <string name="open_source_group">Open group</string>
+    <string name="information_empty_source_groups">You haven\'t created any source groups yet.</string>
+    <string name="also_in_group_">Also in \"%1$s\"</string>
 
     <!-- Extension repos -->
     <string name="source_repos">Extension Repos</string>

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.source
 
+import eu.davidea.flexibleadapter.items.IFlexible
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.source.CatalogueSource
@@ -15,6 +16,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
+import yokai.domain.source.interactor.GetSourceGroups
 import java.util.TreeMap
 
 /**
@@ -31,18 +34,22 @@ class SourcePresenter(
     private val preferences: PreferencesHelper = Injekt.get(),
 ) {
 
+    private val getSourceGroups: GetSourceGroups by injectLazy()
+
     private var scope = CoroutineScope(Job() + Dispatchers.Default)
     var sources = getEnabledSources()
 
-    var sourceItems = emptyList<SourceItem>()
+    /** Group rows followed by the ungrouped sources, so this holds more than just [SourceItem]. */
+    var browseItems = emptyList<IFlexible<*>>()
     var lastUsedItem: SourceItem? = null
 
     var lastUsedJob: Job? = null
+    private var groupsJob: Job? = null
 
     fun onCreate() {
         if (lastSources != null) {
-            if (sourceItems.isEmpty()) {
-                sourceItems = lastSources ?: emptyList()
+            if (browseItems.isEmpty()) {
+                browseItems = lastSources ?: emptyList()
             }
             lastUsedItem = lastUsedItemRem
             lastSources = null
@@ -58,6 +65,14 @@ class SourcePresenter(
      */
     private fun loadSources() {
         scope.launch {
+            val groups = getSourceGroups.all()
+            val groupedIds = groups.flatMapTo(mutableSetOf()) { it.sourceIds }
+            val enabledIds = sources.mapTo(mutableSetOf()) { it.id }
+
+            // Dropping grouped sources before the split below takes them out of both their language
+            // section and the pinned section in one go.
+            val ungrouped = sources.filterNot { it.id in groupedIds }
+
             val pinnedSources = mutableListOf<SourceItem>()
             val pinnedCatalogues = preferences.pinnedCatalogues().get()
 
@@ -69,8 +84,8 @@ class SourcePresenter(
                     else -> d1.compareTo(d2)
                 }
             }
-            val byLang = sources.groupByTo(map) { it.lang }
-            sourceItems = byLang.flatMap {
+            val byLang = ungrouped.groupByTo(map) { it.lang }
+            var sourceItems: List<IFlexible<*>> = byLang.flatMap {
                 val langItem = LangItem(it.key)
                 it.value.map { source ->
                     val isPinned = source.id.toString() in pinnedCatalogues
@@ -86,10 +101,25 @@ class SourcePresenter(
                 sourceItems = pinnedSources + sourceItems
             }
 
-            lastUsedItem = getLastUsedSource(preferences.lastUsedCatalogueSource().get())
+            val groupHeader = LangItem(GROUPS_KEY)
+            val groupItems = groups
+                .filter { it.showInBrowse }
+                .map { group ->
+                    SourceGroupItem(
+                        groupId = group.id,
+                        name = group.name,
+                        sourceCount = group.sourceIds.count { it in enabledIds },
+                        header = groupHeader,
+                    )
+                }
+
+            browseItems = groupItems + sourceItems
+
+            lastUsedItem = getLastUsedSource(preferences.lastUsedCatalogueSource().get(), groupedIds)
             withUIContext {
-                controller.setSources(sourceItems, lastUsedItem)
+                controller.setSources(browseItems, lastUsedItem)
                 loadLastUsedSource()
+                loadSourceGroups()
             }
         }
     }
@@ -99,15 +129,27 @@ class SourcePresenter(
         lastUsedJob = preferences.lastUsedCatalogueSource().changes()
             .drop(1)
             .onEach {
-                lastUsedItem = getLastUsedSource(it)
+                lastUsedItem = getLastUsedSource(it, getSourceGroups.groupedSourceIds())
                 withUIContext {
                     controller.setLastUsedSource(lastUsedItem)
                 }
             }.launchIn(scope)
     }
 
-    private fun getLastUsedSource(value: Long): SourceItem? {
+    private fun loadSourceGroups() {
+        groupsJob?.cancel()
+        groupsJob = getSourceGroups.changes()
+            .drop(1)
+            .onEach {
+                withUIContext { updateSources() }
+            }.launchIn(scope)
+    }
+
+    private fun getLastUsedSource(value: Long, groupedIds: Set<Long>): SourceItem? {
         return (sourceManager.get(value) as? CatalogueSource)?.let { source ->
+            // A grouped source shouldn't announce itself at the top of the main Browse list.
+            if (source.id in groupedIds) return@let null
+
             val pinnedCatalogues = preferences.pinnedCatalogues().get()
             val isPinned = source.id.toString() in pinnedCatalogues
             if (isPinned) {
@@ -124,7 +166,7 @@ class SourcePresenter(
     }
 
     fun onDestroy() {
-        lastSources = sourceItems
+        lastSources = browseItems
         lastUsedItemRem = lastUsedItem
     }
 
@@ -146,13 +188,17 @@ class SourcePresenter(
     companion object {
         const val PINNED_KEY = "pinned"
         const val LAST_USED_KEY = "last_used"
+        const val GROUPS_KEY = "source_groups"
 
-        private var lastSources: List<SourceItem>? = null
+        private var lastSources: List<IFlexible<*>>? = null
         private var lastUsedItemRem: SourceItem? = null
 
-        fun onLowMemory() {
+        /** Drops the cross-instance cache so the next Browse load rebuilds from preferences. */
+        fun invalidateCache() {
             lastSources = null
             lastUsedItemRem = null
         }
+
+        fun onLowMemory() = invalidateCache()
     }
 }

@@ -1,0 +1,17 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_search"
+        android:title="@string/search"
+        android:icon="@drawable/ic_search_24dp"
+        android:visible="false"
+        app:showAsAction="collapseActionView|ifRoom"
+        app:actionViewClass="eu.kanade.tachiyomi.ui.base.MiniSearchView"/>
+
+    <item
+        android:id="@+id/action_edit_group_sources"
+        android:title="@string/edit_group_sources"
+        android:icon="@drawable/ic_edit_24dp"
+        app:showAsAction="ifRoom"/>
+</menu>

@@ -29,8 +29,6 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.preference.PreferenceValues
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.databinding.BrowseControllerBinding
-import eu.kanade.tachiyomi.source.CatalogueSource
-import eu.kanade.tachiyomi.source.LocalSource
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.ui.base.controller.BaseLegacyController
 import eu.kanade.tachiyomi.ui.extension.ExtensionFilterController
@@ -42,6 +40,7 @@ import eu.kanade.tachiyomi.ui.setting.controllers.SettingsBrowseController
 import eu.kanade.tachiyomi.ui.setting.controllers.SettingsSourcesController
 import eu.kanade.tachiyomi.ui.source.browse.BrowseSourceController
 import eu.kanade.tachiyomi.ui.source.globalsearch.GlobalSearchController
+import eu.kanade.tachiyomi.ui.source.group.SourceGroupBrowseController
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.getBottomGestureInsets
 import eu.kanade.tachiyomi.util.system.getResourceColor
@@ -71,8 +70,10 @@ import kotlinx.parcelize.Parcelize
 import uy.kohesive.injekt.injectLazy
 import yokai.domain.base.BasePreferences
 import yokai.domain.base.BasePreferences.ExtensionInstaller
+import yokai.domain.source.interactor.GetSourceGroups
 import yokai.i18n.MR
 import yokai.presentation.extension.repo.ExtensionRepoController
+import yokai.presentation.source.group.SourceGroupsController
 import yokai.util.lang.getString
 import java.util.*
 import kotlin.math.max
@@ -96,6 +97,8 @@ class BrowseController :
      * Application preferences.
      */
     private val preferences: PreferencesHelper by injectLazy()
+
+    private val getSourceGroups: GetSourceGroups by injectLazy()
 
     /**
      * Adapter containing sources.
@@ -138,7 +141,7 @@ class BrowseController :
     override fun onViewCreated(view: View) {
         super.onViewCreated(view)
         val isReturning = adapter != null
-        adapter = SourceAdapter(this)
+        adapter = SourceAdapter(this, this)
         // Create binding.sourceRecycler and set adapter.
         binding.sourceRecycler.layoutManager = LinearLayoutManagerAccurateOffset(view.context)
 
@@ -282,8 +285,8 @@ class BrowseController :
 
         setSheetToolbar()
         presenter.onCreate()
-        if (presenter.sourceItems.isNotEmpty()) {
-            setSources(presenter.sourceItems, presenter.lastUsedItem)
+        if (presenter.browseItems.isNotEmpty()) {
+            setSources(presenter.browseItems, presenter.lastUsedItem)
         } else {
             binding.sourceRecycler.checkHeightThen {
                 binding.sourceRecycler.scrollToPosition(0)
@@ -583,12 +586,17 @@ class BrowseController :
     }
 
     override fun onItemClick(view: View, position: Int): Boolean {
-        val item = adapter?.getItem(position) as? SourceItem ?: return false
-        val source = item.source
-        // Open the catalogue view.
-        openCatalogue(source, BrowseSourceController(source))
+        when (val item = adapter?.getItem(position)) {
+            is SourceGroupItem ->
+                router.pushController(SourceGroupBrowseController(item.groupId).withFadeTransaction())
+            // Open the catalogue view.
+            is SourceItem -> openCatalogue(item.source, BrowseSourceController(item.source))
+            else -> return false
+        }
         return false
     }
+
+    override fun onHideClick(position: Int) = hideCatalogue(position)
 
     fun hideCatalogue(position: Int) {
         val source = (adapter?.getItem(position) as? SourceItem)?.source ?: return
@@ -637,25 +645,6 @@ class BrowseController :
         openCatalogue(item.source, BrowseSourceController(item.source, useLatest = true))
     }
 
-    /**
-     * Opens a catalogue with the given controller.
-     */
-    private fun openCatalogue(source: CatalogueSource, controller: BrowseSourceController) {
-        if (!preferences.incognitoMode().get()) {
-            preferences.lastUsedCatalogueSource().set(source.id)
-            if (source !is LocalSource) {
-                val list = preferences.lastUsedSources().get().toMutableSet()
-                list.removeAll { it.startsWith("${source.id}:") }
-                list.add("${source.id}:${Date().time}")
-                val sortedList = list.filter { it.split(":").size == 2 }
-                    .sortedByDescending { it.split(":").last().toLong() }
-                preferences.lastUsedSources()
-                    .set(sortedList.take(2).toSet())
-            }
-        }
-        router.pushController(controller.withFadeTransaction())
-    }
-
     override fun expandSearch() {
         if (showingExtensions) {
             binding.bottomSheet.root.sheetBehavior?.collapse()
@@ -687,6 +676,12 @@ class BrowseController :
         }
     }
 
+    override fun onPrepareOptionsMenu(menu: Menu) {
+        // No point offering the shortcut until there's a group to open
+        menu.findItem(R.id.action_source_groups)?.isVisible = getSourceGroups.all().isNotEmpty()
+        super.onPrepareOptionsMenu(menu)
+    }
+
     private fun performGlobalSearch(query: String) {
         router.pushController(GlobalSearchController(query).withFadeTransaction())
     }
@@ -702,6 +697,9 @@ class BrowseController :
             // Initialize option to open catalogue settings.
             R.id.action_filter -> {
                 router.pushController(SettingsSourcesController().withFadeTransaction())
+            }
+            R.id.action_source_groups -> {
+                router.pushController(SourceGroupsController().withFadeTransaction())
             }
             R.id.action_migration_guide -> {
                 activity?.openInBrowser(HELP_URL)

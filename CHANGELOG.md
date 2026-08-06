@@ -11,6 +11,14 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 ## [Unreleased]
 
 ### Additions
+- Sources can now be bundled into named groups, managed from Browse or Browse settings
+  - A group's sources leave the main Browse list and are only reachable from the group's own screen
+  - Searching from inside a group covers just that group's sources
+  - A group can be hidden from the Browse list, and left out of global search
+    - "Search all sources" still reaches a group that global search skips
+  - Grouped sources are kept out of the launcher shortcuts, the Browse "last used" row and the
+    migration source picker
+  - Groups are stored with your other source settings, so they are included in backups
 - Add support for extension lib 1.6 (tachiyomix), while keeping lib 1.3 to 1.5 extensions working
   - Extensions can now return details and chapters from a single `getMangaUpdate` call
   - Read `tachiyomix.name`, `tachiyomix.extensionLib` and `tachiyomix.contentWarning` manifest metadata

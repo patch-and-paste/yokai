@@ -32,6 +32,7 @@ import uy.kohesive.injekt.injectLazy
 import yokai.domain.manga.interactor.GetManga
 import yokai.domain.manga.interactor.InsertManga
 import yokai.domain.manga.interactor.UpdateManga
+import yokai.domain.source.interactor.GetSourceGroups
 
 /**
  * Presenter of [GlobalSearchController]
@@ -51,6 +52,7 @@ open class GlobalSearchPresenter(
     private val getManga: GetManga by injectLazy()
     private val insertManga: InsertManga by injectLazy()
     private val updateManga: UpdateManga by injectLazy()
+    private val getSourceGroups: GetSourceGroups by injectLazy()
 
     /**
      * Enabled sources.
@@ -64,9 +66,13 @@ open class GlobalSearchPresenter(
     var searchingAllSources = false
         private set
 
-    /** True while the pinned-only setting is still narrowing the search. */
+    /** True while the pinned-only setting or a source group is still narrowing the search. */
     val canSearchAllSources: Boolean
-        get() = preferences.onlySearchPinned().get() && !searchingAllSources
+        get() = !searchingAllSources &&
+            (
+                preferences.onlySearchPinned().get() ||
+                    getSourceGroups.globalSearchExcludedSourceIds().isNotEmpty()
+                )
 
     private var fetchSourcesJob: Job? = null
 
@@ -109,10 +115,13 @@ open class GlobalSearchPresenter(
         val languages = preferences.enabledLanguages().get()
         val hiddenCatalogues = preferences.hiddenSources().get()
         val pinnedCatalogues = preferences.pinnedCatalogues().get()
+        val groupExcluded = getSourceGroups.globalSearchExcludedSourceIds()
 
         val list = sourceManager.getCatalogueSources()
             .filter { it.lang in languages }
             .filterNot { it.id.toString() in hiddenCatalogues }
+            // Asking for all sources is a real escape hatch, so it reaches excluded groups too
+            .filterNot { !searchingAllSources && it.id in groupExcluded }
             .sortedBy { "(${it.lang}) ${it.name}" }
 
         return if (preferences.onlySearchPinned().get() && !searchingAllSources) {

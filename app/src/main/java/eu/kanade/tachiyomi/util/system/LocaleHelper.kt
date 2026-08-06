@@ -20,6 +20,7 @@ object LocaleHelper {
             "", "other" -> context.getString(MR.strings.other)
             SourcePresenter.LAST_USED_KEY -> context.getString(MR.strings.last_used)
             SourcePresenter.PINNED_KEY -> context.getString(MR.strings.pinned)
+            SourcePresenter.GROUPS_KEY -> context.getString(MR.strings.source_groups)
             "all" -> context.getString(MR.strings.all)
             else -> getLocalizedDisplayName(lang)
         }

@@ -49,6 +49,8 @@ import yokai.domain.source.browse.filter.SavedSearchRepository
 import yokai.domain.source.browse.filter.interactor.DeleteSavedSearch
 import yokai.domain.source.browse.filter.interactor.GetSavedSearch
 import yokai.domain.source.browse.filter.interactor.InsertSavedSearch
+import yokai.domain.source.interactor.GetSourceGroups
+import yokai.domain.source.interactor.UpdateSourceGroups
 import yokai.domain.track.TrackRepository
 import yokai.domain.track.interactor.DeleteTrack
 import yokai.domain.track.interactor.GetTrack
@@ -109,4 +111,7 @@ fun domainModule() = module {
     factory { GetSavedSearch(get()) }
     factory { InsertSavedSearch(get()) }
     factory { FilterSerializer() }
+
+    factory { GetSourceGroups(get()) }
+    factory { UpdateSourceGroups(get()) }
 }

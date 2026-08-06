@@ -10,6 +10,12 @@
         app:showAsAction="collapseActionView|ifRoom"
         app:actionViewClass="eu.kanade.tachiyomi.ui.base.MiniSearchView"/>
 
+    <item android:id="@+id/action_source_groups"
+        android:title="@string/source_groups"
+        android:icon="@drawable/ic_label_outline_24dp"
+        android:visible="false"
+        app:showAsAction="ifRoom"/>
+
     <item android:id="@+id/action_filter"
         android:title="@string/filter"
         android:icon="@drawable/ic_filter_list_24dp"

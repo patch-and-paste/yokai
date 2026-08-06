@@ -28,6 +28,7 @@ import eu.kanade.tachiyomi.util.system.launchIO
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import yokai.domain.manga.models.cover
+import yokai.domain.source.interactor.GetSourceGroups
 import yokai.i18n.MR
 import yokai.util.lang.getString
 import kotlin.math.min
@@ -36,6 +37,7 @@ class MangaShortcutManager(
     val preferences: PreferencesHelper = Injekt.get(),
     val coverCache: CoverCache = Injekt.get(),
     val sourceManager: SourceManager = Injekt.get(),
+    val getSourceGroups: GetSourceGroups = Injekt.get(),
 ) {
 
     fun updateShortcuts(context: Context) {
@@ -55,11 +57,16 @@ class MangaShortcutManager(
                     emptyList()
                 }
                 val recentSources = if (preferences.showSourcesInShortcuts().get()) {
+                    // Grouped sources stay off the launcher, even though they're still recorded as
+                    // last used.
+                    val groupedIds = getSourceGroups.groupedSourceIds()
                     preferences.lastUsedSources().get().mapNotNull {
                         val splitS = it.split(":")
-                        splitS.first().toLongOrNull()?.let { id ->
-                            sourceManager.getOrStub(id) to splitS[1].toLong()
-                        }
+                        splitS.first().toLongOrNull()
+                            ?.takeIf { id -> id !in groupedIds }
+                            ?.let { id ->
+                                sourceManager.getOrStub(id) to splitS[1].toLong()
+                            }
                     }
                 } else {
                     emptyList()
